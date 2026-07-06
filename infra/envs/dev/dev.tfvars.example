@@ -1,0 +1,12 @@
+project_id         = "istat-ndc-schema-ass-cms-dev"
+region             = "europe-west8"
+firestore_location = "europe-west8"
+
+# Replace with your Google account before running terraform plan/apply.
+developer_invokers = [
+  "user:your.email@example.com"
+]
+
+# Optional. Leave empty to use:
+# istat-ndc-schema-ass-cms-dev-schema-assistant-dev-data
+bucket_name = ""
