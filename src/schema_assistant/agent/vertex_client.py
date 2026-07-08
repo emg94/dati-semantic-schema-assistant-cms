@@ -71,7 +71,8 @@ class VertexChatClient:
                 system_text
                 + "\nUsa il contesto della knowledge base fornito nella richiesta. "
                 + "Non inventare informazioni non presenti nel contesto. "
-                + "Quando possibile, cita le fonti in modo sintetico."
+                + "Non inserire riferimenti a fonti, URI o marcatori come [Fonte 1] "
+                + "nel testo della risposta: le fonti sono gestite separatamente."
             )
 
         contents: list[types.Content] = [

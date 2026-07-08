@@ -12,6 +12,7 @@ from schema_assistant.agent.guardrails import validate_chat_request
 from schema_assistant.agent.logging import configure_logging
 from schema_assistant.agent.models import ChatRequest, ChatResponse, ChatUsage, ErrorResponse
 from schema_assistant.agent.retrieval import RetrievalResult, get_knowledge_base_retriever
+from schema_assistant.agent.static_answers import find_static_answer
 from schema_assistant.agent.vertex_client import get_vertex_chat_client
 
 settings = get_settings()
@@ -100,6 +101,25 @@ def health() -> dict[str, str]:
 def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JSONResponse:
     request_id = http_request.state.request_id
     validate_chat_request(request, settings)
+
+    static_answer = find_static_answer(request.message)
+    if static_answer:
+        logger.info(
+            "static_answer_completed",
+            extra={
+                "request_id": request_id,
+                "reason": static_answer.reason,
+                "rag_enabled": settings.rag_enabled,
+            },
+        )
+        return ChatResponse(
+            answer=static_answer.answer,
+            sources=[],
+            usage=ChatUsage(input_tokens=0, output_tokens=0, total_tokens=0),
+            cost_status=settings.cost_status,
+            rag_enabled=settings.rag_enabled,
+            request_id=request_id,
+        )
 
     if not settings.llm_enabled:
         return ChatResponse(

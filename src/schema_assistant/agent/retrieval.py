@@ -137,10 +137,9 @@ def _build_context(chunks: list[SearchResult], *, max_chars: int) -> str:
             continue
 
         block = (
-            f"[Fonte {index}]\n"
+            f"Estratto {index}\n"
             f"Ente: {chunk.entity_id}\n"
             f"Risorsa: {chunk.resource_id}\n"
-            f"URI: {chunk.source_uri}\n"
             f"Contenuto:\n{text}"
         )
         remaining = max_chars - used_chars
