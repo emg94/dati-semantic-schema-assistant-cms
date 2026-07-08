@@ -57,9 +57,11 @@ module "cloud_run" {
   service_prefix                  = var.service_prefix
   labels                          = local.labels
   agent_image                     = var.agent_image
+  web_image                       = var.web_image
   ingestion_image                 = var.ingestion_image
   agent_service_account_email     = module.foundation.agent_service_account_email
   ingestion_service_account_email = module.foundation.ingestion_service_account_email
+  web_service_account_email       = module.foundation.web_service_account_email
   bucket_name                     = module.foundation.bucket_name
   firestore_database_name         = module.foundation.firestore_database_name
   developer_invokers              = var.developer_invokers

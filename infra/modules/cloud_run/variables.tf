@@ -28,6 +28,11 @@ variable "agent_image" {
   type        = string
 }
 
+variable "web_image" {
+  description = "Web frontend container image."
+  type        = string
+}
+
 variable "ingestion_image" {
   description = "Ingestion job container image."
   type        = string
@@ -40,6 +45,11 @@ variable "agent_service_account_email" {
 
 variable "ingestion_service_account_email" {
   description = "Service account used by the ingestion job."
+  type        = string
+}
+
+variable "web_service_account_email" {
+  description = "Service account used by the public web frontend."
   type        = string
 }
 

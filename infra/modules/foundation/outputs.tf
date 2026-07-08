@@ -22,6 +22,10 @@ output "ingestion_service_account_email" {
   value = google_service_account.ingestion.email
 }
 
+output "web_service_account_email" {
+  value = google_service_account.web.email
+}
+
 output "cloud_build_default_service_account_email" {
   value = local.cloud_build_default_service_account
 }

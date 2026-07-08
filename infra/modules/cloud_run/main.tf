@@ -1,6 +1,67 @@
 locals {
   agent_name     = "${var.service_prefix}-agent-${var.environment}"
+  web_name       = "${var.service_prefix}-web-${var.environment}"
   ingestion_name = "${var.service_prefix}-ingestion-${var.environment}"
+}
+
+resource "google_cloud_run_v2_service" "web" {
+  project              = var.project_id
+  name                 = local.web_name
+  location             = var.region
+  ingress              = "INGRESS_TRAFFIC_ALL"
+  invoker_iam_disabled = false
+  deletion_protection  = var.deletion_protection
+  labels               = var.labels
+
+  template {
+    service_account                  = var.web_service_account_email
+    timeout                          = "60s"
+    max_instance_request_concurrency = 80
+
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 3
+    }
+
+    containers {
+      image = var.web_image
+
+      ports {
+        container_port = 8080
+      }
+
+      env {
+        name  = "APP_ENV"
+        value = var.environment
+      }
+
+      env {
+        name  = "AGENT_SERVICE_URL"
+        value = google_cloud_run_v2_service.agent.uri
+      }
+
+      resources {
+        limits = {
+          cpu    = "1"
+          memory = "512Mi"
+        }
+
+        cpu_idle = true
+      }
+    }
+  }
+
+  traffic {
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+    percent = 100
+  }
+
+  lifecycle {
+    # Application images are deployed by Cloud Build/gcloud in dev.
+    ignore_changes = [
+      template[0].containers[0].image,
+    ]
+  }
 }
 
 resource "google_cloud_run_v2_service" "agent" {
@@ -169,7 +230,18 @@ resource "google_cloud_run_v2_service_iam_binding" "agent_invokers" {
   location = google_cloud_run_v2_service.agent.location
   name     = google_cloud_run_v2_service.agent.name
   role     = "roles/run.invoker"
-  members  = var.developer_invokers
+  members = concat(
+    var.developer_invokers,
+    ["serviceAccount:${var.web_service_account_email}"],
+  )
+}
+
+resource "google_cloud_run_v2_service_iam_binding" "web_public_invokers" {
+  project  = var.project_id
+  location = google_cloud_run_v2_service.web.location
+  name     = google_cloud_run_v2_service.web.name
+  role     = "roles/run.invoker"
+  members  = ["allUsers"]
 }
 
 resource "google_cloud_run_v2_job" "ingestion" {

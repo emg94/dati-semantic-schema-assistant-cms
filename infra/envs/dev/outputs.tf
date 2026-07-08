@@ -30,6 +30,10 @@ output "ingestion_service_account_email" {
   value = module.foundation.ingestion_service_account_email
 }
 
+output "web_service_account_email" {
+  value = module.foundation.web_service_account_email
+}
+
 output "cloud_build_default_service_account_email" {
   value = module.foundation.cloud_build_default_service_account_email
 }
@@ -40,6 +44,14 @@ output "agent_service_name" {
 
 output "agent_url" {
   value = module.cloud_run.agent_url
+}
+
+output "web_service_name" {
+  value = module.cloud_run.web_service_name
+}
+
+output "web_url" {
+  value = module.cloud_run.web_url
 }
 
 output "ingestion_job_name" {

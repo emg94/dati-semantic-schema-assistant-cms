@@ -334,6 +334,44 @@ gcloud run jobs update schema-assistant-ingestion-dev `
 La configurazione ordinaria resta in Terraform: usa questi override solo per
 prove operative mirate.
 
+## 9. Frontend web pubblico
+
+Il frontend Angular verra ospitato in `apps/web/` e deployato come servizio Cloud
+Run separato dall'agent. Il servizio web e pubblico, mentre l'agent resta
+privato: il service account del web e autorizzato a invocare l'agent tramite IAM.
+
+Per creare il servizio web placeholder:
+
+```powershell
+terraform fmt -recursive infra
+terraform -chdir=infra\envs\dev validate
+terraform -chdir=infra\envs\dev plan -var-file=dev.tfvars -out=dev-web.tfplan
+terraform -chdir=infra\envs\dev apply dev-web.tfplan
+```
+
+L'URL pubblico viene esposto da Terraform:
+
+```powershell
+terraform -chdir=infra\envs\dev output -raw web_url
+```
+
+Quando il progetto Angular sara migrato in `apps/web/` e avra
+`apps/web/Dockerfile`, builda e deploya solo il web:
+
+```powershell
+gcloud builds submit `
+  --project istat-ndc-schema-ass-cms-dev `
+  --region europe-west8 `
+  --config cloudbuild.web.yaml `
+  --substitutions _IMAGE=europe-west8-docker.pkg.dev/istat-ndc-schema-ass-cms-dev/schema-assistant/web:dev `
+  .
+
+gcloud run services update schema-assistant-web-dev `
+  --project istat-ndc-schema-ass-cms-dev `
+  --region europe-west8 `
+  --image europe-west8-docker.pkg.dev/istat-ndc-schema-ass-cms-dev/schema-assistant/web:dev
+```
+
 Kill switch temporaneo per costi o manutenzione:
 
 ```powershell

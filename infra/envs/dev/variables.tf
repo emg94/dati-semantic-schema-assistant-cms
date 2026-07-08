@@ -89,6 +89,12 @@ variable "agent_image" {
   default     = "us-docker.pkg.dev/cloudrun/container/hello"
 }
 
+variable "web_image" {
+  description = "Bootstrap image for the web frontend. Application deploys update it outside Terraform."
+  type        = string
+  default     = "us-docker.pkg.dev/cloudrun/container/hello"
+}
+
 variable "ingestion_image" {
   description = "Bootstrap image for the ingestion job. Application deploys update it outside Terraform."
   type        = string

@@ -19,6 +19,11 @@ locals {
     "roles/monitoring.metricWriter",
   ]
 
+  web_project_roles = [
+    "roles/logging.logWriter",
+    "roles/monitoring.metricWriter",
+  ]
+
   service_account_roles = flatten([
     for item in [
       {
@@ -28,6 +33,10 @@ locals {
       {
         email = google_service_account.ingestion.email
         roles = local.ingestion_project_roles
+      },
+      {
+        email = google_service_account.web.email
+        roles = local.web_project_roles
       }
     ] : [
       for role in item.roles : {
@@ -121,6 +130,13 @@ resource "google_service_account" "ingestion" {
   account_id   = "${var.service_prefix}-ingestion-${var.environment}"
   display_name = "Schema Assistant ingestion (${var.environment})"
   description  = "Runs the manual ingestion job on Cloud Run."
+}
+
+resource "google_service_account" "web" {
+  project      = var.project_id
+  account_id   = "${var.service_prefix}-web-${var.environment}"
+  display_name = "Schema Assistant web (${var.environment})"
+  description  = "Runs the public web frontend on Cloud Run."
 }
 
 resource "google_project_iam_member" "runtime_roles" {
