@@ -216,10 +216,45 @@ resource "google_cloud_run_v2_job" "ingestion" {
           value = "chunks"
         }
 
+        env {
+          name  = "ENTITIES_CONFIG_PATH"
+          value = "config/entities_config.json"
+        }
+
+        env {
+          name  = "INGESTION_DOCS_DIR"
+          value = "knowledge_base_docs"
+        }
+
+        env {
+          name  = "INGESTION_MAX_CHUNK_CHARS"
+          value = "3500"
+        }
+
+        env {
+          name  = "INGESTION_CHUNK_OVERLAP_CHARS"
+          value = "300"
+        }
+
+        env {
+          name  = "INGESTION_MAX_TRIPLES_PER_FILE"
+          value = "600"
+        }
+
+        env {
+          name  = "INGESTION_FIRESTORE_WRITE_BATCH_SIZE"
+          value = "50"
+        }
+
+        env {
+          name  = "INGESTION_DRY_RUN"
+          value = "false"
+        }
+
         resources {
           limits = {
             cpu    = "2"
-            memory = "2Gi"
+            memory = "4Gi"
           }
         }
       }

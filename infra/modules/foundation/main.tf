@@ -94,6 +94,11 @@ resource "google_firestore_index" "rag_chunks_vector" {
   query_scope = "COLLECTION_GROUP"
 
   fields {
+    field_path = "__name__"
+    order      = "ASCENDING"
+  }
+
+  fields {
     field_path = "embedding"
 
     vector_config {

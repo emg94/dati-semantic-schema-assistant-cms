@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from typing import Any, cast
 
 from google.cloud import firestore
@@ -14,6 +15,14 @@ EMBEDDING_FIELD = "embedding"
 DISTANCE_FIELD = "vector_distance"
 
 
+@dataclass(frozen=True)
+class SourceIndexEntry:
+    source_uri: str
+    source_hash: str
+    status: str
+    chunks_written: int
+
+
 class FirestoreVectorStore:
     def __init__(
         self,
@@ -21,12 +30,83 @@ class FirestoreVectorStore:
         project_id: str,
         database: str = "(default)",
         chunks_collection_group: str = CHUNKS_COLLECTION_GROUP,
+        write_batch_size: int = 50,
     ) -> None:
         if not project_id:
             raise ValueError("project_id is required")
+        if write_batch_size <= 0 or write_batch_size > 450:
+            raise ValueError("write_batch_size must be between 1 and 450")
 
         self._client = firestore.Client(project=project_id, database=database)
         self._chunks_collection_group = chunks_collection_group
+        self._write_batch_size = write_batch_size
+
+    def get_source_index(
+        self,
+        *,
+        entity_id: str,
+        resource_id: str,
+        source_uri_hash: str,
+    ) -> SourceIndexEntry | None:
+        snapshot = self._source_index_ref(
+            entity_id=entity_id,
+            resource_id=resource_id,
+            source_uri_hash=source_uri_hash,
+        ).get()
+        if not snapshot.exists:
+            return None
+
+        data = snapshot.to_dict() or {}
+        return SourceIndexEntry(
+            source_uri=str(data.get("source_uri", "")),
+            source_hash=str(data.get("source_hash", "")),
+            status=str(data.get("status", "")),
+            chunks_written=int(data.get("chunks_written") or 0),
+        )
+
+    def mark_source_processing(
+        self,
+        *,
+        source: SourceDocument,
+        source_uri_hash: str,
+    ) -> None:
+        self._source_index_ref(
+            entity_id=source.entity_id,
+            resource_id=source.resource_id,
+            source_uri_hash=source_uri_hash,
+        ).set(
+            {
+                "source_uri": source.source_uri,
+                "source_hash": source.source_hash,
+                "status": "processing",
+                "started_at": firestore.SERVER_TIMESTAMP,
+                "updated_at": firestore.SERVER_TIMESTAMP,
+            },
+            merge=True,
+        )
+
+    def mark_source_completed(
+        self,
+        *,
+        source: SourceDocument,
+        source_uri_hash: str,
+        chunks_written: int,
+    ) -> None:
+        self._source_index_ref(
+            entity_id=source.entity_id,
+            resource_id=source.resource_id,
+            source_uri_hash=source_uri_hash,
+        ).set(
+            {
+                "source_uri": source.source_uri,
+                "source_hash": source.source_hash,
+                "status": "completed",
+                "chunks_written": chunks_written,
+                "completed_at": firestore.SERVER_TIMESTAMP,
+                "updated_at": firestore.SERVER_TIMESTAMP,
+            },
+            merge=True,
+        )
 
     def upsert_source(self, source: SourceDocument) -> None:
         entity_ref = self._client.collection("entities").document(source.entity_id)
@@ -63,7 +143,7 @@ class FirestoreVectorStore:
 
     def upsert_chunks(self, chunks: Sequence[ChunkDocument]) -> int:
         written = 0
-        for chunk_batch in _batches(chunks, 450):
+        for chunk_batch in _batches(chunks, self._write_batch_size):
             batch = self._client.batch()
             for chunk in chunk_batch:
                 ref = self._chunk_ref(chunk)
@@ -72,6 +152,40 @@ class FirestoreVectorStore:
                 written += 1
             batch.commit()
         return written
+
+    def delete_chunks_for_source(
+        self,
+        *,
+        entity_id: str,
+        resource_id: str,
+        shard_id: str,
+        source_uri: str,
+    ) -> int:
+        collection = (
+            self._client.collection("entities")
+            .document(entity_id)
+            .collection("resources")
+            .document(resource_id)
+            .collection("shards")
+            .document(shard_id)
+            .collection(self._chunks_collection_group)
+        )
+
+        deleted = 0
+        batch = self._client.batch()
+        batch_size = 0
+        for snapshot in collection.where("source_uri", "==", source_uri).stream():
+            batch.delete(snapshot.reference)
+            deleted += 1
+            batch_size += 1
+            if batch_size >= 450:
+                batch.commit()
+                batch = self._client.batch()
+                batch_size = 0
+
+        if batch_size:
+            batch.commit()
+        return deleted
 
     def search(
         self,
@@ -119,6 +233,22 @@ class FirestoreVectorStore:
             .document(chunk.shard_id)
             .collection(self._chunks_collection_group)
             .document(chunk.chunk_id)
+        )
+
+    def _source_index_ref(
+        self,
+        *,
+        entity_id: str,
+        resource_id: str,
+        source_uri_hash: str,
+    ) -> Any:
+        return (
+            self._client.collection("entities")
+            .document(entity_id)
+            .collection("resources")
+            .document(resource_id)
+            .collection("source_index")
+            .document(source_uri_hash)
         )
 
 

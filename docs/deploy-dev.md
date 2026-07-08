@@ -241,6 +241,88 @@ dimension: 2048
 
 La documentazione di dettaglio e in `docs/knowledge-base-design.md`.
 
+## 8. Build e deploy job ingestion
+
+Il job ingestion e manuale: non esiste scheduler. Il container clona i repo
+GitHub in `/tmp`, salva raw e processed assets su Cloud Storage, genera
+embedding con Vertex AI e scrive i chunk in Firestore.
+
+Il container usa la virtualenv creata da `uv sync`; il `PATH` punta quindi a
+`/app/.venv/bin` per rendere importabile il package `schema_assistant`.
+
+Le scritture Firestore dei chunk usano batch piccole
+`INGESTION_FIRESTORE_WRITE_BATCH_SIZE=50`: i vettori a 2048 dimensioni rendono
+ogni documento piu pesante e batch troppo grandi superano il limite payload
+dell'API.
+
+La memoria del job e impostata a `4Gi`. I vocabolari grandi, come ATECO, possono
+richiedere molta RAM durante il parsing RDF; il codice scrive comunque i chunk a
+batch piccoli per evitare di accumulare embedding e documenti Firestore in
+memoria.
+
+Il job usa `source_hash` per saltare le source gia completate. Se un file TTL,
+YAML, PDF o CSV cambia, cambia anche l'hash e quella source viene processata di
+nuovo.
+
+Build dell'immagine:
+
+```powershell
+gcloud builds submit `
+  --project istat-ndc-schema-ass-cms-dev `
+  --region europe-west8 `
+  --config cloudbuild.ingestion.yaml `
+  --substitutions _IMAGE=europe-west8-docker.pkg.dev/istat-ndc-schema-ass-cms-dev/schema-assistant/ingestion:dev `
+  .
+```
+
+Aggiorna il Cloud Run Job:
+
+```powershell
+gcloud run jobs update schema-assistant-ingestion-dev `
+  --project istat-ndc-schema-ass-cms-dev `
+  --region europe-west8 `
+  --image europe-west8-docker.pkg.dev/istat-ndc-schema-ass-cms-dev/schema-assistant/ingestion:dev
+```
+
+Esecuzione manuale:
+
+```powershell
+gcloud run jobs execute schema-assistant-ingestion-dev `
+  --project istat-ndc-schema-ass-cms-dev `
+  --region europe-west8 `
+  --wait
+```
+
+Per controllare le ultime execution:
+
+```powershell
+gcloud run jobs executions list `
+  --job schema-assistant-ingestion-dev `
+  --project istat-ndc-schema-ass-cms-dev `
+  --region europe-west8
+```
+
+Per fare una prova senza scrivere su Storage/Firestore, usa temporaneamente:
+
+```powershell
+gcloud run jobs update schema-assistant-ingestion-dev `
+  --project istat-ndc-schema-ass-cms-dev `
+  --region europe-west8 `
+  --set-env-vars INGESTION_DRY_RUN=true
+```
+
+Riporta poi il valore operativo:
+
+```powershell
+gcloud run jobs update schema-assistant-ingestion-dev `
+  --project istat-ndc-schema-ass-cms-dev `
+  --region europe-west8 `
+  --set-env-vars INGESTION_DRY_RUN=false
+```
+
+La configurazione ordinaria resta in Terraform: usa questi override solo per
+prove operative mirate.
+
 Kill switch temporaneo per costi o manutenzione:
 
 ```powershell
