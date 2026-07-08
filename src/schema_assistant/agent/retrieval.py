@@ -23,6 +23,7 @@ class RetrievalResult:
     chunks: list[SearchResult]
     detected_entities: set[str]
     detected_resources: set[str]
+    listing_question: bool
 
 
 class KnowledgeBaseRetriever:
@@ -45,17 +46,31 @@ class KnowledgeBaseRetriever:
         detected_entities = _detect_entities(question)
         detected_resources = _detect_resources(question, self._resource_keywords)
         entity_filter = _entity_filter_for_resources(detected_entities, detected_resources)
+        listing_question = _is_listing_question(question)
+        search_limit = (
+            self._settings.rag_top_k * 2 if listing_question else self._settings.rag_top_k
+        )
+        candidate_limit = (
+            self._settings.rag_candidate_limit * 2
+            if listing_question
+            else self._settings.rag_candidate_limit
+        )
+        context_max_chars = (
+            self._settings.rag_context_max_chars * 2
+            if listing_question
+            else self._settings.rag_context_max_chars
+        )
         query_vector = self._embeddings.embed_query(question)
 
         chunks = self._store.search(
             query_vector,
-            limit=self._settings.rag_top_k,
-            candidate_limit=self._settings.rag_candidate_limit,
+            limit=search_limit,
+            candidate_limit=candidate_limit,
             entity_ids=entity_filter,
             resource_ids=detected_resources or None,
         )
 
-        context = _build_context(chunks, max_chars=self._settings.rag_context_max_chars)
+        context = _build_context(chunks, max_chars=context_max_chars)
         sources = _dedupe_sources(chunks)
         return RetrievalResult(
             context=context,
@@ -63,6 +78,7 @@ class KnowledgeBaseRetriever:
             chunks=chunks,
             detected_entities=detected_entities,
             detected_resources=detected_resources,
+            listing_question=listing_question,
         )
 
 
@@ -132,7 +148,7 @@ def _build_context(chunks: list[SearchResult], *, max_chars: int) -> str:
     blocks: list[str] = []
     used_chars = 0
     for index, chunk in enumerate(chunks, start=1):
-        text = chunk.content.strip()
+        text = _sanitize_context_content(chunk.content)
         if not text:
             continue
 
@@ -153,6 +169,16 @@ def _build_context(chunks: list[SearchResult], *, max_chars: int) -> str:
     return "\n\n---\n\n".join(blocks)
 
 
+def _sanitize_context_content(content: str) -> str:
+    lines = []
+    for line in content.splitlines():
+        stripped = line.strip()
+        if re.match(r"^(fonte|source|uri)\s*:", stripped, flags=re.IGNORECASE):
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip()
+
+
 def _dedupe_sources(chunks: list[SearchResult]) -> list[str]:
     sources = []
     seen = set()
@@ -168,3 +194,23 @@ def _dedupe_sources(chunks: list[SearchResult]) -> list[str]:
 def _normalize_text(value: str) -> str:
     lowered = value.lower()
     return re.sub(r"\s+", " ", lowered).strip()
+
+
+def _is_listing_question(question: str) -> bool:
+    normalized = _normalize_text(question)
+    listing_keywords = {
+        "elenca",
+        "elenco",
+        "lista",
+        "quali",
+        "tutte",
+        "tutti",
+        "pubblicato",
+        "pubblicati",
+        "pubblicate",
+        "risorse",
+        "ontologie",
+        "vocabolari",
+        "schemi",
+    }
+    return any(keyword in normalized for keyword in listing_keywords)

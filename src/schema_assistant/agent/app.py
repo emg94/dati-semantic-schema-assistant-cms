@@ -179,6 +179,9 @@ def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JSONResp
             "rag_resources": sorted(retrieval_result.detected_resources)
             if retrieval_result
             else [],
+            "rag_listing_question": retrieval_result.listing_question
+            if retrieval_result
+            else False,
         },
     )
 

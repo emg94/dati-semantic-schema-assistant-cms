@@ -63,14 +63,18 @@ class VertexChatClient:
         system_text = (
             "Sei l'assistente del catalogo per l'interoperabilita "
             "della semantica dei dati. Rispondi in italiano, in modo "
-            "conciso e trasparente. Se non hai contesto sufficiente, "
-            "dillo chiaramente."
+            "chiaro e trasparente. Sii conciso sulle domande puntuali, "
+            "ma completo quando l'utente chiede elenchi o risorse pubblicate. "
+            "Se non hai contesto sufficiente, dillo chiaramente."
         )
         if context:
             system_text = (
                 system_text
                 + "\nUsa il contesto della knowledge base fornito nella richiesta. "
                 + "Non inventare informazioni non presenti nel contesto. "
+                + "Se la domanda chiede un elenco, riporta tutti gli elementi "
+                + "distinti presenti nel contesto e non fermarti a pochi esempi. "
+                + "Non mostrare URI o URL se l'utente non li chiede esplicitamente. "
                 + "Non inserire riferimenti a fonti, URI o marcatori come [Fonte 1] "
                 + "nel testo della risposta: le fonti sono gestite separatamente."
             )
