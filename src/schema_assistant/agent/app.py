@@ -11,6 +11,7 @@ from schema_assistant.agent.config import get_settings
 from schema_assistant.agent.guardrails import validate_chat_request
 from schema_assistant.agent.logging import configure_logging
 from schema_assistant.agent.models import ChatRequest, ChatResponse, ChatUsage, ErrorResponse
+from schema_assistant.agent.retrieval import RetrievalResult, get_knowledge_base_retriever
 from schema_assistant.agent.vertex_client import get_vertex_chat_client
 
 settings = get_settings()
@@ -109,8 +110,26 @@ def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JSONResp
             request_id=request_id,
         )
 
+    retrieval_result: RetrievalResult | None = None
+    if settings.rag_enabled:
+        try:
+            retrieval_result = get_knowledge_base_retriever().retrieve(request.message)
+        except Exception:
+            logger.exception("rag_retrieval_failed", extra={"request_id": request_id})
+            return JSONResponse(
+                status_code=502,
+                content=ErrorResponse(
+                    detail="La knowledge base non e al momento raggiungibile.",
+                    request_id=request_id,
+                ).model_dump(),
+            )
+
     try:
-        result = get_vertex_chat_client().answer(request.message, request.history)
+        result = get_vertex_chat_client().answer(
+            request.message,
+            request.history,
+            context=retrieval_result.context if retrieval_result else None,
+        )
     except Exception:
         logger.exception("vertex_chat_failed", extra={"request_id": request_id})
         return JSONResponse(
@@ -133,11 +152,19 @@ def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JSONResp
             "thinking_budget": settings.thinking_budget,
             "max_output_tokens": settings.max_output_tokens,
             "history_messages": len(request.history),
+            "rag_enabled": settings.rag_enabled,
+            "rag_chunks": len(retrieval_result.chunks) if retrieval_result else 0,
+            "rag_sources": len(retrieval_result.sources) if retrieval_result else 0,
+            "rag_entities": sorted(retrieval_result.detected_entities) if retrieval_result else [],
+            "rag_resources": sorted(retrieval_result.detected_resources)
+            if retrieval_result
+            else [],
         },
     )
 
     return ChatResponse(
         answer=result.answer,
+        sources=retrieval_result.sources if retrieval_result else [],
         usage=result.usage,
         cost_status=settings.cost_status,
         rag_enabled=settings.rag_enabled,

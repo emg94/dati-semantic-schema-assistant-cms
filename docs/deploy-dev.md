@@ -206,6 +206,10 @@ thinking resta disponibile, ma con un budget esplicito: in dev e nel futuro RAG
 vogliamo ragionamento, risposte complete e costi prevedibili nello stesso
 momento.
 
+Con la knowledge base popolata, l'agent usa `RAG_ENABLED=true`: genera embedding
+della domanda, cerca i chunk su Firestore Vector e passa al modello solo il
+contesto recuperato. Le fonti sono restituite nel campo `sources`.
+
 ## 7. Firestore Vector e Storage Knowledge Base
 
 La Fase 3 aggiunge la struttura della knowledge base, ma lascia `RAG_ENABLED=false`. In questo

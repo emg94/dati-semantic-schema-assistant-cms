@@ -28,8 +28,14 @@ class VertexChatClient:
             location=settings.location,
         )
 
-    def answer(self, message: str, history: Sequence[ChatMessage]) -> VertexChatResult:
-        contents = cast(Any, self._build_contents(message, history))
+    def answer(
+        self,
+        message: str,
+        history: Sequence[ChatMessage],
+        *,
+        context: str | None = None,
+    ) -> VertexChatResult:
+        contents = cast(Any, self._build_contents(message, history, context=context))
         response = self._client.models.generate_content(
             model=self._settings.chat_model,
             contents=contents,
@@ -48,20 +54,30 @@ class VertexChatClient:
         )
 
     @staticmethod
-    def _build_contents(message: str, history: Sequence[ChatMessage]) -> list[types.Content]:
+    def _build_contents(
+        message: str,
+        history: Sequence[ChatMessage],
+        *,
+        context: str | None = None,
+    ) -> list[types.Content]:
+        system_text = (
+            "Sei l'assistente del catalogo per l'interoperabilita "
+            "della semantica dei dati. Rispondi in italiano, in modo "
+            "conciso e trasparente. Se non hai contesto sufficiente, "
+            "dillo chiaramente."
+        )
+        if context:
+            system_text = (
+                system_text
+                + "\nUsa il contesto della knowledge base fornito nella richiesta. "
+                + "Non inventare informazioni non presenti nel contesto. "
+                + "Quando possibile, cita le fonti in modo sintetico."
+            )
+
         contents: list[types.Content] = [
             types.Content(
                 role="user",
-                parts=[
-                    types.Part.from_text(
-                        text=(
-                            "Sei l'assistente del catalogo per l'interoperabilita "
-                            "della semantica dei dati. Rispondi in italiano, in modo "
-                            "conciso e trasparente. Se non hai contesto sufficiente, "
-                            "dillo chiaramente."
-                        )
-                    )
-                ],
+                parts=[types.Part.from_text(text=system_text)],
             )
         ]
 
@@ -73,10 +89,16 @@ class VertexChatClient:
                 )
             )
 
+        final_message = message
+        if context:
+            final_message = (
+                f"Contesto dalla knowledge base:\n{context}\n\nDomanda utente:\n{message}"
+            )
+
         contents.append(
             types.Content(
                 role="user",
-                parts=[types.Part.from_text(text=message)],
+                parts=[types.Part.from_text(text=final_message)],
             )
         )
         return contents

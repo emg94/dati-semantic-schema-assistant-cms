@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, field_validator
@@ -25,6 +26,12 @@ class AgentSettings(BaseSettings):
     llm_enabled: bool = Field(default=True, alias="LLM_ENABLED")
     rag_enabled: bool = Field(default=False, alias="RAG_ENABLED")
     rag_top_k: int = Field(default=8, alias="RAG_TOP_K")
+    rag_candidate_limit: int = Field(default=40, alias="RAG_CANDIDATE_LIMIT")
+    rag_context_max_chars: int = Field(default=12000, alias="RAG_CONTEXT_MAX_CHARS")
+    resources_config_path: Path = Field(
+        default=Path("config/resources.json"),
+        alias="RESOURCES_CONFIG_PATH",
+    )
 
     max_input_chars: int = Field(default=4000, alias="MAX_INPUT_CHARS")
     max_history_messages: int = Field(default=12, alias="MAX_HISTORY_MESSAGES")
@@ -43,6 +50,8 @@ class AgentSettings(BaseSettings):
         "max_input_chars",
         "max_history_messages",
         "max_output_tokens",
+        "rag_candidate_limit",
+        "rag_context_max_chars",
         "rag_top_k",
     )
     @classmethod

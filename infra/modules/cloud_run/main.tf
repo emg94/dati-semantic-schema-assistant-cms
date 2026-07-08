@@ -86,12 +86,27 @@ resource "google_cloud_run_v2_service" "agent" {
 
       env {
         name  = "RAG_ENABLED"
-        value = "false"
+        value = "true"
       }
 
       env {
         name  = "RAG_TOP_K"
         value = "8"
+      }
+
+      env {
+        name  = "RAG_CANDIDATE_LIMIT"
+        value = "40"
+      }
+
+      env {
+        name  = "RAG_CONTEXT_MAX_CHARS"
+        value = "12000"
+      }
+
+      env {
+        name  = "RESOURCES_CONFIG_PATH"
+        value = "config/resources.json"
       }
 
       env {
