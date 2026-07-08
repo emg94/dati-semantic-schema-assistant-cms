@@ -206,6 +206,41 @@ thinking resta disponibile, ma con un budget esplicito: in dev e nel futuro RAG
 vogliamo ragionamento, risposte complete e costi prevedibili nello stesso
 momento.
 
+## 7. Firestore Vector e Storage Knowledge Base
+
+La Fase 3 aggiunge la struttura della knowledge base, ma lascia `RAG_ENABLED=false`. In questo
+modo possiamo validare bucket, Firestore e indice vettoriale prima di cambiare
+il comportamento della chat.
+
+Applica l'infrastruttura aggiornata:
+
+```powershell
+terraform fmt -recursive infra
+terraform -chdir=infra\envs\dev validate
+terraform -chdir=infra\envs\dev plan -var-file=dev.tfvars -out=dev-knowledge-base.tfplan
+terraform -chdir=infra\envs\dev apply dev-knowledge-base.tfplan
+```
+
+Verifica che l'indice vettoriale sia presente. La creazione puo richiedere
+qualche minuto:
+
+```powershell
+gcloud firestore indexes composite list `
+  --project istat-ndc-schema-ass-cms-dev `
+  --database="(default)"
+```
+
+Il valore atteso e:
+
+```text
+collection group: chunks
+query scope: COLLECTION_GROUP
+vector field: embedding
+dimension: 2048
+```
+
+La documentazione di dettaglio e in `docs/knowledge-base-design.md`.
+
 Kill switch temporaneo per costi o manutenzione:
 
 ```powershell

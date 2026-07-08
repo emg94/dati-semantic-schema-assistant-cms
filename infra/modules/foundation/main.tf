@@ -87,6 +87,23 @@ resource "google_firestore_database" "default" {
   deletion_policy         = var.firestore_deletion_policy
 }
 
+resource "google_firestore_index" "rag_chunks_vector" {
+  project     = var.project_id
+  database    = google_firestore_database.default.name
+  collection  = "chunks"
+  query_scope = "COLLECTION_GROUP"
+
+  fields {
+    field_path = "embedding"
+
+    vector_config {
+      dimension = var.embedding_vector_dimension
+
+      flat {}
+    }
+  }
+}
+
 resource "google_service_account" "agent" {
   project      = var.project_id
   account_id   = "${var.service_prefix}-agent-${var.environment}"

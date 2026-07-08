@@ -70,6 +70,16 @@ resource "google_cloud_run_v2_service" "agent" {
       }
 
       env {
+        name  = "EMBEDDING_DIMENSION"
+        value = "2048"
+      }
+
+      env {
+        name  = "FIRESTORE_CHUNKS_COLLECTION_GROUP"
+        value = "chunks"
+      }
+
+      env {
         name  = "LLM_ENABLED"
         value = "true"
       }
@@ -77,6 +87,11 @@ resource "google_cloud_run_v2_service" "agent" {
       env {
         name  = "RAG_ENABLED"
         value = "false"
+      }
+
+      env {
+        name  = "RAG_TOP_K"
+        value = "8"
       }
 
       env {
@@ -184,6 +199,21 @@ resource "google_cloud_run_v2_job" "ingestion" {
         env {
           name  = "SCHEMA_ASSISTANT_BUCKET"
           value = var.bucket_name
+        }
+
+        env {
+          name  = "EMBEDDING_MODEL"
+          value = "gemini-embedding-001"
+        }
+
+        env {
+          name  = "EMBEDDING_DIMENSION"
+          value = "2048"
+        }
+
+        env {
+          name  = "FIRESTORE_CHUNKS_COLLECTION_GROUP"
+          value = "chunks"
         }
 
         resources {

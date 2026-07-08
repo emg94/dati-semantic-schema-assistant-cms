@@ -33,6 +33,11 @@ variable "artifact_registry_repository_id" {
   type        = string
 }
 
+variable "embedding_vector_dimension" {
+  description = "Dimension used by Vertex embeddings and Firestore vector indexes."
+  type        = number
+}
+
 variable "firestore_location" {
   description = "Firestore database location."
   type        = string

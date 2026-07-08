@@ -39,6 +39,7 @@ module "foundation" {
   labels                          = local.labels
   bucket_name                     = var.bucket_name
   artifact_registry_repository_id = var.artifact_registry_repository_id
+  embedding_vector_dimension      = var.embedding_vector_dimension
   firestore_location              = var.firestore_location
   firestore_deletion_policy       = var.firestore_deletion_policy
   firestore_delete_protection     = var.firestore_delete_protection

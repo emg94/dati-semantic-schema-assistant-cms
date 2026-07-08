@@ -10,6 +10,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
+COPY config ./config
 COPY src ./src
 
 # Install only the agent runtime extras; ingestion dependencies live in the job image.

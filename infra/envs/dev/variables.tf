@@ -72,6 +72,17 @@ variable "artifact_registry_repository_id" {
   default     = "schema-assistant"
 }
 
+variable "embedding_vector_dimension" {
+  description = "Vertex embedding output dimension stored in Firestore vector indexes."
+  type        = number
+  default     = 2048
+
+  validation {
+    condition     = var.embedding_vector_dimension > 0 && var.embedding_vector_dimension <= 2048
+    error_message = "Firestore vector indexes support dimensions from 1 to 2048."
+  }
+}
+
 variable "agent_image" {
   description = "Bootstrap image for the agent. Application deploys update it outside Terraform."
   type        = string
