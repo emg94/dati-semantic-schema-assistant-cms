@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -77,12 +78,16 @@ class AssetParser:
         graph.parse(path, format="turtle")
 
         lines: list[str] = []
+        asset_labels: list[str] = []
+        asset_keywords: set[str] = set()
         namespaces = {prefix: str(namespace) for prefix, namespace in graph.namespaces()}
         subjects = sorted(
             {subject for subject in graph.subjects() if isinstance(subject, URIRef)}, key=str
         )
 
         for subject in subjects:
+            asset_keywords.add(_clean_node(subject))
+            asset_labels.extend(_subject_labels(graph, subject))
             subject_lines = _subject_summary(graph, subject)
             if subject_lines:
                 lines.extend(subject_lines)
@@ -109,6 +114,12 @@ class AssetParser:
             "format": "ttl",
             "namespaces": namespaces,
             "triple_count": len(graph),
+            "subject_count": len(subjects),
+            "asset_labels": _dedupe_text(asset_labels, limit=80),
+            "asset_keywords": _dedupe_text(
+                [*asset_keywords, *_keywords_from_values(asset_labels)],
+                limit=120,
+            ),
             "sample_triples": triples,
         }
 
@@ -120,7 +131,13 @@ class AssetParser:
             payload = yaml.safe_load(file) or {}
 
         content = json.dumps(payload, ensure_ascii=False, indent=2, default=str)
-        return content, {"format": "yaml", "content": payload}
+        title = _yaml_title(payload)
+        return content, {
+            "format": "yaml",
+            "content": payload,
+            "asset_labels": [title] if title else [],
+            "asset_keywords": _keyword_tokens(title or ""),
+        }
 
     @staticmethod
     def _parse_pdf(path: Path) -> tuple[str, dict[str, Any]]:
@@ -151,6 +168,15 @@ class AssetParser:
             "format": "csv",
             "row_count": len(rows),
             "columns": list(rows[0].keys()) if rows else [],
+            "asset_labels": list(rows[0].keys()) if rows else [],
+            "asset_keywords": _dedupe_text(
+                [
+                    token
+                    for column in (rows[0].keys() if rows else [])
+                    for token in _keyword_tokens(column)
+                ],
+                limit=80,
+            ),
         }
 
 
@@ -223,6 +249,14 @@ def _literal_values(graph: Graph, subject: URIRef, predicate: URIRef) -> list[st
     return values
 
 
+def _subject_labels(graph: Graph, subject: URIRef) -> list[str]:
+    from rdflib.namespace import RDFS, SKOS
+
+    return _literal_values(graph, subject, RDFS.label) + _literal_values(
+        graph, subject, SKOS.prefLabel
+    )
+
+
 def _clean_node(value: Any) -> str:
     from rdflib import Literal, URIRef
 
@@ -237,3 +271,44 @@ def _clean_node(value: Any) -> str:
             return f"{text} ^^ {value.datatype}"
         return text
     return str(value)
+
+
+def _yaml_title(payload: Any) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+
+    info = payload.get("info")
+    if isinstance(info, dict) and str(info.get("title", "")).strip():
+        return str(info["title"]).strip()
+
+    title = payload.get("title")
+    if str(title or "").strip():
+        return str(title).strip()
+    return None
+
+
+def _keyword_tokens(value: str) -> list[str]:
+    return [
+        token
+        for token in re.findall(r"\w{3,}", value.lower())
+        if token not in {"http", "https", "www", "org", "ttl", "yaml", "json"}
+    ]
+
+
+def _keywords_from_values(values: list[str]) -> list[str]:
+    return [token for value in values for token in _keyword_tokens(value)]
+
+
+def _dedupe_text(items: list[str], *, limit: int) -> list[str]:
+    deduped = []
+    seen = set()
+    for item in items:
+        text = str(item).strip()
+        key = text.lower()
+        if not text or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(text)
+        if len(deduped) >= limit:
+            break
+    return deduped

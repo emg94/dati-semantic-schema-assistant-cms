@@ -268,6 +268,13 @@ Il job usa `source_hash` per saltare le source gia completate. Se un file TTL,
 YAML, PDF o CSV cambia, cambia anche l'hash e quella source viene processata di
 nuovo.
 
+Oltre ai chunk vettoriali, il job aggiorna anche
+`entities/{ente}/resources/{risorsa}/asset_index/{source_uri_hash}`. Questo
+indice contiene metadata sintetici usati dall'agent per rispondere meglio a
+domande di elenco, confronto e conteggio. Dopo modifiche al parser o al routing
+metadata, rilancia il job: le source gia completate vengono saltate lato
+embedding, ma l'`asset_index` viene comunque aggiornato.
+
 Build dell'immagine:
 
 ```powershell

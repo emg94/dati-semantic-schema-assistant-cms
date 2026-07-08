@@ -20,7 +20,11 @@ from schema_assistant.ingestion.parsers import AssetParser, ParsedAsset
 from schema_assistant.ingestion.report import IngestionReport
 from schema_assistant.knowledge_base.embeddings import VertexEmbeddingClient
 from schema_assistant.knowledge_base.firestore_store import FirestoreVectorStore
-from schema_assistant.knowledge_base.models import ChunkDocument, SourceDocument
+from schema_assistant.knowledge_base.models import (
+    AssetMetadataDocument,
+    ChunkDocument,
+    SourceDocument,
+)
 from schema_assistant.knowledge_base.paths import (
     KnowledgeBasePathBuilder,
     safe_segment,
@@ -157,12 +161,22 @@ def _process_source(
             "processed_storage_uri": processed_storage_uri,
         },
     )
+    asset_document = _asset_metadata_document(
+        parsed=parsed,
+        raw_storage_uri=raw_storage_uri,
+        processed_storage_uri=processed_storage_uri,
+    )
     source_uri_hash = stable_hash(source.source_uri, length=32)
 
     if not settings.dry_run:
         existing_source = vector_store.get_source_index(
             entity_id=source.entity_id,
             resource_id=source.resource_id,
+            source_uri_hash=source_uri_hash,
+        )
+        vector_store.upsert_source(source_document)
+        vector_store.upsert_asset_metadata(
+            asset_document,
             source_uri_hash=source_uri_hash,
         )
         if (
@@ -186,7 +200,6 @@ def _process_source(
             )
             return
 
-        vector_store.upsert_source(source_document)
         vector_store.mark_source_processing(
             source=source_document,
             source_uri_hash=source_uri_hash,
@@ -366,6 +379,75 @@ def _chunk_document(
             "content_type": parsed.content_type,
         },
     )
+
+
+def _asset_metadata_document(
+    *,
+    parsed: ParsedAsset,
+    raw_storage_uri: str | None,
+    processed_storage_uri: str | None,
+) -> AssetMetadataDocument:
+    source = parsed.source
+    payload = parsed.processed_payload
+    labels = _string_list(payload.get("asset_labels"))
+    keywords = _string_list(payload.get("asset_keywords"))
+    title = _asset_title(source.relative_path, labels)
+
+    return AssetMetadataDocument(
+        entity_id=source.entity_id,
+        resource_id=source.resource_id,
+        source_uri=source.source_uri,
+        source_hash=parsed.source_hash,
+        title=title,
+        relative_path=source.relative_path,
+        repo_url=source.repo_url,
+        storage_uri=raw_storage_uri,
+        processed_storage_uri=processed_storage_uri,
+        content_type=parsed.content_type,
+        format=str(payload.get("format") or source.path.suffix.lstrip(".") or "text"),
+        labels=labels[:80],
+        keywords=_dedupe_text([*keywords, *_path_keywords(source.relative_path)], limit=140),
+        metadata={
+            "triple_count": payload.get("triple_count"),
+            "subject_count": payload.get("subject_count"),
+            "row_count": payload.get("row_count"),
+            "page_count": payload.get("page_count"),
+        },
+    )
+
+
+def _asset_title(relative_path: str, labels: list[str]) -> str:
+    if labels:
+        return labels[0]
+
+    filename = Path(relative_path).stem
+    return filename.replace("_", " ").replace("-", " ").strip() or relative_path
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _path_keywords(relative_path: str) -> list[str]:
+    normalized = relative_path.replace("/", " ").replace("_", " ").replace("-", " ")
+    return [token.lower() for token in normalized.split() if len(token) >= 3]
+
+
+def _dedupe_text(items: list[str], *, limit: int) -> list[str]:
+    deduped = []
+    seen = set()
+    for item in items:
+        text = str(item).strip()
+        key = text.lower()
+        if not text or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(text)
+        if len(deduped) >= limit:
+            break
+    return deduped
 
 
 def _write_report(

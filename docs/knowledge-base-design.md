@@ -33,6 +33,7 @@ entities/{ente}
 entities/{ente}/resources/{risorsa}
 entities/{ente}/resources/{risorsa}/sources/{source_hash}
 entities/{ente}/resources/{risorsa}/source_index/{source_uri_hash}
+entities/{ente}/resources/{risorsa}/asset_index/{source_uri_hash}
 entities/{ente}/resources/{risorsa}/shards/{shard}/chunks/{chunk_id}
 ```
 
@@ -44,6 +45,14 @@ viene quindi creato una sola volta sulla collection group `chunks`, campo
 versione del contenuto. Il job usa `source_index/{source_uri_hash}` per saltare
 una source gia completata con lo stesso hash. Se il file cambia, l'hash cambia e
 la source viene processata di nuovo.
+
+`asset_index/{source_uri_hash}` contiene metadata sintetici per ogni asset:
+titolo, percorso, formato, label estratte, keyword e puntatori agli oggetti su
+Cloud Storage. Questo indice serve alle domande deterministiche, ad esempio
+elenchi, confronti e conteggi. Il job aggiorna `asset_index` anche quando una
+source viene saltata perche gia processata; in questo modo e possibile popolare
+il nuovo indice rilanciando l'ingestion senza rigenerare embedding per file
+invariati.
 
 ## Dimensione embedding
 
@@ -57,6 +66,18 @@ La query vettoriale iniziale lavora sulla collection group `chunks`. Il filtro
 per ente e tipo risorsa viene applicato nel codice sui candidati restituiti.
 Quando avremo dati reali e misure di costo/qualita, potremo aggiungere indici
 compositi con pre-filter Firestore per i percorsi piu frequenti.
+
+Per domande di elenco o conteggio l'agent usa prima `asset_index`, se la domanda
+contiene abbastanza segnali per individuare ente e tipo risorsa. Il vector search
+resta il canale principale per domande semantiche o descrittive, mentre
+`asset_index` riduce i casi in cui una domanda di catalogo viene trattata come
+una ricerca testuale generica.
+
+Il routing usa due livelli:
+
+- `config/resources.json` definisce le risorse tecniche disponibili.
+- `config/routing_lexicon.json` contiene sinonimi e termini di dominio, come
+  classificazioni, benefici, prestazioni SIUSS e superstiti.
 
 ## Ingestion
 

@@ -13,7 +13,24 @@
   },
   "vocabularies": {
     "collection_suffix": "vocabularies",
-    "keywords": ["vocabolario", "vocabolari", "catalogo", "risorse semantiche", "risorse"]
+    "keywords": [
+      "vocabolario",
+      "vocabolari",
+      "classificazione",
+      "classificazioni",
+      "classification",
+      "classifications",
+      "controlled vocabulary",
+      "controlled-vocabulary",
+      "beneficio",
+      "benefici",
+      "prestazione",
+      "prestazioni",
+      "siuss",
+      "catalogo",
+      "risorse semantiche",
+      "risorse"
+    ]
   },
   "context_documents": {
     "collection_suffix": "context_documents",

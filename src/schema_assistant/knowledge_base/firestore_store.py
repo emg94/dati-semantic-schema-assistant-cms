@@ -8,7 +8,13 @@ from google.cloud import firestore
 from google.cloud.firestore_v1.base_vector_query import DistanceMeasure
 from google.cloud.firestore_v1.vector import Vector
 
-from schema_assistant.knowledge_base.models import ChunkDocument, SearchResult, SourceDocument
+from schema_assistant.knowledge_base.models import (
+    AssetMetadataDocument,
+    ChunkDocument,
+    MetadataSearchResult,
+    SearchResult,
+    SourceDocument,
+)
 
 CHUNKS_COLLECTION_GROUP = "chunks"
 EMBEDDING_FIELD = "embedding"
@@ -141,6 +147,71 @@ class FirestoreVectorStore:
         )
         batch.commit()
 
+    def upsert_asset_metadata(
+        self,
+        asset: AssetMetadataDocument,
+        *,
+        source_uri_hash: str,
+    ) -> None:
+        entity_ref = self._client.collection("entities").document(asset.entity_id)
+        resource_ref = entity_ref.collection("resources").document(asset.resource_id)
+        asset_ref = resource_ref.collection("asset_index").document(source_uri_hash)
+
+        batch = self._client.batch()
+        batch.set(
+            entity_ref,
+            {
+                "entity_id": asset.entity_id,
+                "updated_at": firestore.SERVER_TIMESTAMP,
+            },
+            merge=True,
+        )
+        batch.set(
+            resource_ref,
+            {
+                "entity_id": asset.entity_id,
+                "resource_id": asset.resource_id,
+                "updated_at": firestore.SERVER_TIMESTAMP,
+            },
+            merge=True,
+        )
+        batch.set(
+            asset_ref,
+            {
+                **asset.model_dump(mode="json"),
+                "updated_at": firestore.SERVER_TIMESTAMP,
+            },
+            merge=True,
+        )
+        batch.commit()
+
+    def list_asset_metadata(
+        self,
+        *,
+        entity_ids: set[str],
+        resource_ids: set[str],
+        limit_per_resource: int = 200,
+    ) -> list[MetadataSearchResult]:
+        if not entity_ids or not resource_ids:
+            return []
+        if limit_per_resource <= 0:
+            raise ValueError("limit_per_resource must be positive")
+
+        results: list[MetadataSearchResult] = []
+        for entity_id in sorted(entity_ids):
+            for resource_id in sorted(resource_ids):
+                collection = (
+                    self._client.collection("entities")
+                    .document(entity_id)
+                    .collection("resources")
+                    .document(resource_id)
+                    .collection("asset_index")
+                )
+                for snapshot in collection.limit(limit_per_resource).stream():
+                    data = snapshot.to_dict() or {}
+                    results.append(_metadata_result(data))
+        return results
+
     def upsert_chunks(self, chunks: Sequence[ChunkDocument]) -> int:
         written = 0
         for chunk_batch in _batches(chunks, self._write_batch_size):
@@ -271,6 +342,22 @@ def _search_result(snapshot_id: str, data: dict[str, Any]) -> SearchResult:
         source_uri=str(data["source_uri"]),
         storage_uri=data.get("storage_uri"),
         distance=data.get(DISTANCE_FIELD),
+        metadata=data.get("metadata") or {},
+    )
+
+
+def _metadata_result(data: dict[str, Any]) -> MetadataSearchResult:
+    return MetadataSearchResult(
+        entity_id=str(data["entity_id"]),
+        resource_id=data["resource_id"],
+        source_uri=str(data["source_uri"]),
+        source_hash=str(data["source_hash"]),
+        title=str(data["title"]),
+        relative_path=str(data["relative_path"]),
+        labels=[str(item) for item in data.get("labels") or []],
+        keywords=[str(item) for item in data.get("keywords") or []],
+        content_type=str(data.get("content_type") or "text/plain"),
+        format=data.get("format"),
         metadata=data.get("metadata") or {},
     )
 

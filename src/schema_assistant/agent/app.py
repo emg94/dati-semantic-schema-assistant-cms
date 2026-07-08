@@ -174,6 +174,7 @@ def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JSONResp
             "history_messages": len(request.history),
             "rag_enabled": settings.rag_enabled,
             "rag_chunks": len(retrieval_result.chunks) if retrieval_result else 0,
+            "rag_metadata_assets": len(retrieval_result.metadata_assets) if retrieval_result else 0,
             "rag_sources": len(retrieval_result.sources) if retrieval_result else 0,
             "rag_entities": sorted(retrieval_result.detected_entities) if retrieval_result else [],
             "rag_resources": sorted(retrieval_result.detected_resources)

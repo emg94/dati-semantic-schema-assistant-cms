@@ -35,6 +35,33 @@ class SourceDocument(BaseModel):
         return stripped
 
 
+class AssetMetadataDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    entity_id: str
+    resource_id: ResourceKind
+    source_uri: str
+    source_hash: str
+    title: str
+    relative_path: str
+    repo_url: str | None = None
+    storage_uri: str | None = None
+    processed_storage_uri: str | None = None
+    content_type: str = "text/plain"
+    format: str | None = None
+    labels: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("entity_id", "source_uri", "source_hash", "title", "relative_path")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("value cannot be empty")
+        return stripped
+
+
 class ChunkDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -79,4 +106,20 @@ class SearchResult(BaseModel):
     source_uri: str
     storage_uri: str | None = None
     distance: float | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MetadataSearchResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    entity_id: str
+    resource_id: ResourceKind
+    source_uri: str
+    source_hash: str
+    title: str
+    relative_path: str
+    labels: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    content_type: str = "text/plain"
+    format: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)

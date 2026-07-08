@@ -1,0 +1,50 @@
+{
+  "vocabularies": {
+    "keywords": [
+      "classificazione",
+      "classificazioni",
+      "vocabolario controllato",
+      "controlled vocabulary",
+      "controlled-vocabulary",
+      "beneficio",
+      "benefici",
+      "benefici pensionistici",
+      "prestazione",
+      "prestazioni",
+      "prestazioni siuss",
+      "categoria prestazione siuss",
+      "categoria benefici pensionistici siuss",
+      "classificazione prestazioni siuss",
+      "classificazione categoria siuss",
+      "tipo categoria prestazione siuss",
+      "elenco categorie prestazioni siuss",
+      "superstiti",
+      "sostegno superstiti",
+      "bisogno di sostegno per i superstiti"
+    ]
+  },
+  "ontologies": {
+    "keywords": [
+      "ontologia",
+      "ontologie",
+      "modello semantico",
+      "dominio semantico"
+    ]
+  },
+  "ttl_schemas": {
+    "keywords": [
+      "schema ttl",
+      "schema turtle",
+      "schemi ttl",
+      "schemi turtle"
+    ]
+  },
+  "yaml_schemas": {
+    "keywords": [
+      "schema yaml",
+      "schemi yaml",
+      "openapi",
+      "api schema"
+    ]
+  }
+}

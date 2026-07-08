@@ -32,6 +32,10 @@ class AgentSettings(BaseSettings):
         default=Path("config/resources.json"),
         alias="RESOURCES_CONFIG_PATH",
     )
+    routing_lexicon_config_path: Path = Field(
+        default=Path("config/routing_lexicon.json"),
+        alias="ROUTING_LEXICON_CONFIG_PATH",
+    )
 
     max_input_chars: int = Field(default=4000, alias="MAX_INPUT_CHARS")
     max_history_messages: int = Field(default=12, alias="MAX_HISTORY_MESSAGES")

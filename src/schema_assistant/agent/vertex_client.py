@@ -72,6 +72,8 @@ class VertexChatClient:
                 system_text
                 + "\nUsa il contesto della knowledge base fornito nella richiesta. "
                 + "Non inventare informazioni non presenti nel contesto. "
+                + "Quando trovi un indice metadata degli asset, usalo come fonte "
+                + "principale per elenchi, confronti e conteggi. "
                 + "Se la domanda chiede un elenco, riporta tutti gli elementi "
                 + "distinti presenti nel contesto e non fermarti a pochi esempi. "
                 + "Non mostrare URI o URL se l'utente non li chiede esplicitamente. "

@@ -9,7 +9,7 @@ from pathlib import Path
 from schema_assistant.agent.config import AgentSettings, get_settings
 from schema_assistant.knowledge_base.embeddings import VertexEmbeddingClient
 from schema_assistant.knowledge_base.firestore_store import FirestoreVectorStore
-from schema_assistant.knowledge_base.models import ResourceKind, SearchResult
+from schema_assistant.knowledge_base.models import MetadataSearchResult, ResourceKind, SearchResult
 
 KNOWN_ENTITIES = {"istat", "inps", "inail", "italia"}
 CATALOG_KEYWORDS = {"schema.gov.it", "catalogo", "interoperabilita", "documento", "documenti"}
@@ -21,6 +21,7 @@ class RetrievalResult:
     context: str
     sources: list[str]
     chunks: list[SearchResult]
+    metadata_assets: list[MetadataSearchResult]
     detected_entities: set[str]
     detected_resources: set[str]
     listing_question: bool
@@ -29,7 +30,10 @@ class RetrievalResult:
 class KnowledgeBaseRetriever:
     def __init__(self, settings: AgentSettings) -> None:
         self._settings = settings
-        self._resource_keywords = _load_resource_keywords(settings.resources_config_path)
+        self._resource_keywords = _load_resource_keywords(
+            settings.resources_config_path,
+            settings.routing_lexicon_config_path,
+        )
         self._embeddings = VertexEmbeddingClient(
             project_id=settings.project_id,
             location=settings.location,
@@ -55,12 +59,20 @@ class KnowledgeBaseRetriever:
             if listing_question
             else self._settings.rag_candidate_limit
         )
+        if entity_filter or detected_resources:
+            candidate_limit = max(candidate_limit, search_limit * 20)
         context_max_chars = (
             self._settings.rag_context_max_chars * 2
             if listing_question
             else self._settings.rag_context_max_chars
         )
         query_vector = self._embeddings.embed_query(question)
+        metadata_assets = self._metadata_assets(
+            question=question,
+            entity_filter=entity_filter,
+            detected_resources=detected_resources,
+            listing_question=listing_question,
+        )
 
         chunks = self._store.search(
             query_vector,
@@ -70,16 +82,49 @@ class KnowledgeBaseRetriever:
             resource_ids=detected_resources or None,
         )
 
-        context = _build_context(chunks, max_chars=context_max_chars)
-        sources = _dedupe_sources(chunks)
+        context = _join_contexts(
+            _build_metadata_context(metadata_assets),
+            _build_context(chunks, max_chars=context_max_chars) if chunks else None,
+        )
+        if not context:
+            context = _empty_context()
+        sources = _dedupe_sources(chunks, metadata_assets)
         return RetrievalResult(
             context=context,
             sources=sources,
             chunks=chunks,
+            metadata_assets=metadata_assets,
             detected_entities=detected_entities,
             detected_resources=detected_resources,
             listing_question=listing_question,
         )
+
+    def _metadata_assets(
+        self,
+        *,
+        question: str,
+        entity_filter: set[str] | None,
+        detected_resources: set[str],
+        listing_question: bool,
+    ) -> list[MetadataSearchResult]:
+        if not listing_question or not entity_filter or not detected_resources:
+            return []
+
+        assets = self._store.list_asset_metadata(
+            entity_ids=entity_filter,
+            resource_ids=detected_resources,
+        )
+        terms = _important_terms(question)
+        scored_assets = [
+            (asset, _metadata_score(asset, terms))
+            for asset in assets
+            if not terms or _metadata_score(asset, terms) > 0
+        ]
+        if not scored_assets:
+            return sorted(assets, key=lambda asset: (asset.entity_id, asset.title))[:40]
+
+        scored_assets.sort(key=lambda item: (-item[1], item[0].entity_id, item[0].title))
+        return [asset for asset, _score in scored_assets[:40]]
 
 
 @lru_cache(maxsize=1)
@@ -87,19 +132,23 @@ def get_knowledge_base_retriever() -> KnowledgeBaseRetriever:
     return KnowledgeBaseRetriever(get_settings())
 
 
-def _load_resource_keywords(path: Path) -> dict[ResourceKind, list[str]]:
-    if not path.exists():
-        return {}
-
-    with path.open("r", encoding="utf-8") as file:
-        payload = json.load(file)
-
+def _load_resource_keywords(*paths: Path) -> dict[ResourceKind, list[str]]:
     keywords: dict[ResourceKind, list[str]] = {}
-    for resource_id, config in payload.items():
-        if not isinstance(config, dict):
+    for path in paths:
+        if not path.exists():
             continue
-        raw_keywords = config.get("keywords") or []
-        keywords[resource_id] = [str(item).lower() for item in raw_keywords if str(item).strip()]
+
+        with path.open("r", encoding="utf-8") as file:
+            payload = json.load(file)
+
+        for resource_id, config in payload.items():
+            if not isinstance(config, dict):
+                continue
+            raw_keywords = config.get("keywords") or []
+            current_keywords = keywords.setdefault(resource_id, [])
+            current_keywords.extend(str(item).lower() for item in raw_keywords if str(item).strip())
+    for resource_id, values in keywords.items():
+        keywords[resource_id] = sorted(set(values))
     return keywords
 
 
@@ -140,10 +189,7 @@ def _entity_filter_for_resources(
 
 def _build_context(chunks: list[SearchResult], *, max_chars: int) -> str:
     if not chunks:
-        return (
-            "Nessun contesto e stato trovato nella knowledge base per questa domanda. "
-            "Rispondi dichiarando che non hai informazioni sufficienti."
-        )
+        return _empty_context()
 
     blocks: list[str] = []
     used_chars = 0
@@ -169,6 +215,47 @@ def _build_context(chunks: list[SearchResult], *, max_chars: int) -> str:
     return "\n\n---\n\n".join(blocks)
 
 
+def _build_metadata_context(assets: list[MetadataSearchResult]) -> str | None:
+    if not assets:
+        return None
+
+    lines = [
+        "Indice metadata degli asset pertinenti.",
+        "Usa questo indice per domande di elenco, confronto o conteggio.",
+    ]
+    for index, asset in enumerate(assets, start=1):
+        labels = "; ".join(asset.labels[:8])
+        keywords = "; ".join(asset.keywords[:12])
+        lines.append(
+            "\n".join(
+                item
+                for item in [
+                    f"Asset {index}",
+                    f"Ente: {asset.entity_id}",
+                    f"Risorsa: {asset.resource_id}",
+                    f"Titolo: {asset.title}",
+                    f"Percorso: {asset.relative_path}",
+                    f"Formato: {asset.format or asset.content_type}",
+                    f"Label: {labels}" if labels else "",
+                    f"Keyword: {keywords}" if keywords else "",
+                ]
+                if item
+            )
+        )
+    return "\n\n---\n\n".join(lines)
+
+
+def _empty_context() -> str:
+    return (
+        "Nessun contesto e stato trovato nella knowledge base per questa domanda. "
+        "Rispondi dichiarando che non hai informazioni sufficienti."
+    )
+
+
+def _join_contexts(*contexts: str | None) -> str:
+    return "\n\n===\n\n".join(context for context in contexts if context)
+
+
 def _sanitize_context_content(content: str) -> str:
     lines = []
     for line in content.splitlines():
@@ -179,11 +266,16 @@ def _sanitize_context_content(content: str) -> str:
     return "\n".join(lines).strip()
 
 
-def _dedupe_sources(chunks: list[SearchResult]) -> list[str]:
+def _dedupe_sources(
+    chunks: list[SearchResult],
+    metadata_assets: list[MetadataSearchResult] | None = None,
+) -> list[str]:
     sources = []
     seen = set()
-    for chunk in chunks:
-        source = chunk.source_uri
+    for source in [
+        *(asset.source_uri for asset in metadata_assets or []),
+        *(chunk.source_uri for chunk in chunks),
+    ]:
         if source in seen:
             continue
         seen.add(source)
@@ -203,6 +295,14 @@ def _is_listing_question(question: str) -> bool:
         "elenco",
         "lista",
         "quali",
+        "quanti",
+        "quante",
+        "numero",
+        "totale",
+        "distinti",
+        "distinte",
+        "combinano",
+        "combinate",
         "tutte",
         "tutti",
         "pubblicato",
@@ -211,6 +311,60 @@ def _is_listing_question(question: str) -> bool:
         "risorse",
         "ontologie",
         "vocabolari",
+        "classificazione",
+        "classificazioni",
         "schemi",
     }
     return any(keyword in normalized for keyword in listing_keywords)
+
+
+def _important_terms(question: str) -> set[str]:
+    stop_words = {
+        "agli",
+        "alla",
+        "alle",
+        "associati",
+        "classificazioni",
+        "combinano",
+        "combinate",
+        "come",
+        "con",
+        "degli",
+        "delle",
+        "distinti",
+        "distinte",
+        "inail",
+        "inps",
+        "istat",
+        "italia",
+        "numero",
+        "ontologie",
+        "quale",
+        "quali",
+        "quando",
+        "risorse",
+        "schemi",
+        "sono",
+        "totale",
+        "vocabolari",
+    }
+    normalized = _normalize_text(question)
+    return {
+        token
+        for token in re.findall(r"\w{4,}", normalized)
+        if token not in stop_words and not token.isdigit()
+    }
+
+
+def _metadata_score(asset: MetadataSearchResult, terms: set[str]) -> int:
+    search_text = _normalize_text(
+        " ".join(
+            [
+                asset.title,
+                asset.relative_path,
+                " ".join(asset.labels),
+                " ".join(asset.keywords),
+            ]
+        )
+    )
+    return sum(1 for term in terms if term in search_text)
