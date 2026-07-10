@@ -336,9 +336,15 @@ prove operative mirate.
 
 ## 9. Frontend web pubblico
 
-Il frontend Angular verra ospitato in `apps/web/` e deployato come servizio Cloud
-Run separato dall'agent. Il servizio web e pubblico, mentre l'agent resta
-privato: il service account del web e autorizzato a invocare l'agent tramite IAM.
+Il frontend Angular e ospitato in `apps/web/` e deployato come servizio Cloud Run
+separato dall'agent. Il servizio web e pubblico, mentre l'agent resta privato: il
+service account del web e autorizzato a invocare l'agent tramite IAM.
+
+Il container web serve l'app Angular e include un proxy server-side per
+`/api/chat`. Il browser non conosce l'URL dell'agent e non riceve token IAM; il
+proxy ottiene invece un ID token dal metadata server Cloud Run e invoca l'agent
+privato. La cronologia della chat resta nella memoria del browser e non viene
+salvata dal servizio web o da Firestore.
 
 Per creare il servizio web placeholder:
 
@@ -355,8 +361,7 @@ L'URL pubblico viene esposto da Terraform:
 terraform -chdir=infra\envs\dev output -raw web_url
 ```
 
-Quando il progetto Angular sara migrato in `apps/web/` e avra
-`apps/web/Dockerfile`, builda e deploya solo il web:
+Builda e deploya solo il web:
 
 ```powershell
 gcloud builds submit `

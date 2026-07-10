@@ -7,6 +7,10 @@
 .terraform
 .uv-cache
 .venv
+**/node_modules/
+**/dist/
+**/.angular/
+**/coverage/
 __pycache__
 *.pyc
 *.pyo
