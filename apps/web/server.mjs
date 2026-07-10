@@ -32,7 +32,8 @@ const securityHeaders = {
     "img-src 'self' data:",
     "object-src 'none'",
     "script-src 'self'",
-    "style-src 'self' https://fonts.googleapis.com https://cdn.jsdelivr.net",
+    // Angular installs component styles at runtime. Scripts remain restricted to self.
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
   ].join('; '),
   'cross-origin-opener-policy': 'same-origin',
   'permissions-policy': 'camera=(), geolocation=(), microphone=()',
