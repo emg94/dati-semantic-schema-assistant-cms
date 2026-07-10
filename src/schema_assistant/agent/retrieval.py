@@ -14,6 +14,26 @@ from schema_assistant.knowledge_base.models import MetadataSearchResult, Resourc
 KNOWN_ENTITIES = {"istat", "inps", "inail", "italia"}
 CATALOG_KEYWORDS = {"schema.gov.it", "catalogo", "interoperabilita", "documento", "documenti"}
 CATALOG_RESOURCES = {"context_documents", "dates_collection"}
+GENERIC_ENTITY_HINTS = {
+    "attivita",
+    "categoria",
+    "classificazione",
+    "classe",
+    "codice",
+    "commercio",
+    "economia",
+    "ente",
+    "industria",
+    "produzione",
+    "risorsa",
+    "risorse",
+    "schema",
+    "servizi",
+    "settore",
+    "tipologia",
+    "vocabolario",
+    "vocabolari",
+}
 
 
 @dataclass(frozen=True)
@@ -34,6 +54,7 @@ class KnowledgeBaseRetriever:
             settings.resources_config_path,
             settings.routing_lexicon_config_path,
         )
+        self._entity_hints = _load_entity_hints(settings.routing_lexicon_config_path)
         self._embeddings = VertexEmbeddingClient(
             project_id=settings.project_id,
             location=settings.location,
@@ -47,20 +68,13 @@ class KnowledgeBaseRetriever:
         )
 
     def retrieve(self, question: str) -> RetrievalResult:
-        detected_entities = _detect_entities(question)
+        detected_entities = _detect_entities(question, self._entity_hints)
         detected_resources = _detect_resources(question, self._resource_keywords)
         entity_filter = _entity_filter_for_resources(detected_entities, detected_resources)
         listing_question = _is_listing_question(question)
         search_limit = (
             self._settings.rag_top_k * 2 if listing_question else self._settings.rag_top_k
         )
-        candidate_limit = (
-            self._settings.rag_candidate_limit * 2
-            if listing_question
-            else self._settings.rag_candidate_limit
-        )
-        if entity_filter or detected_resources:
-            candidate_limit = max(candidate_limit, search_limit * 20)
         context_max_chars = (
             self._settings.rag_context_max_chars * 2
             if listing_question
@@ -77,7 +91,6 @@ class KnowledgeBaseRetriever:
         chunks = self._store.search(
             query_vector,
             limit=search_limit,
-            candidate_limit=candidate_limit,
             entity_ids=entity_filter,
             resource_ids=detected_resources or None,
         )
@@ -152,9 +165,50 @@ def _load_resource_keywords(*paths: Path) -> dict[ResourceKind, list[str]]:
     return keywords
 
 
-def _detect_entities(question: str) -> set[str]:
+def _load_entity_hints(path: Path) -> dict[str, list[str]]:
+    if not path.exists():
+        return {}
+
+    with path.open("r", encoding="utf-8") as file:
+        payload = json.load(file)
+
+    raw_hints = payload.get("entity_hints")
+    if not isinstance(raw_hints, dict):
+        return {}
+
+    hints: dict[str, list[str]] = {}
+    for entity_id, config in raw_hints.items():
+        if entity_id not in KNOWN_ENTITIES or not isinstance(config, dict):
+            continue
+        raw_keywords = config.get("keywords") or []
+        keywords = {
+            _normalize_text(str(keyword))
+            for keyword in raw_keywords
+            if _normalize_text(str(keyword))
+        }
+        if keywords:
+            hints[entity_id] = sorted(keywords, key=lambda keyword: (-len(keyword), keyword))
+    return hints
+
+
+def _detect_entities(
+    question: str,
+    entity_hints: dict[str, list[str]] | None = None,
+) -> set[str]:
     normalized = _normalize_text(question)
     detected = {entity for entity in KNOWN_ENTITIES if entity in normalized}
+    if not detected and entity_hints:
+        entity_scores = {
+            entity_id: _entity_hint_score(normalized, keywords)
+            for entity_id, keywords in entity_hints.items()
+        }
+        highest_score = max(entity_scores.values(), default=0)
+        # A routing hint must be distinctive. Common words alone are not allowed
+        # to narrow a search to a single entity.
+        if highest_score >= 3:
+            detected = {
+                entity_id for entity_id, score in entity_scores.items() if score == highest_score
+            }
     if any(keyword in normalized for keyword in CATALOG_KEYWORDS):
         detected.add("catalog")
     return detected
@@ -172,7 +226,7 @@ def _detect_resources(
         detected.add("dates_collection")
 
     for resource_id, keywords in resource_keywords.items():
-        if any(_normalize_text(keyword) in normalized for keyword in keywords):
+        if any(_contains_term(normalized, keyword) for keyword in keywords):
             detected.add(resource_id)
 
     return detected
@@ -284,8 +338,28 @@ def _dedupe_sources(
 
 
 def _normalize_text(value: str) -> str:
-    lowered = value.lower()
+    lowered = value.lower().replace("'", " ")
     return re.sub(r"\s+", " ", lowered).strip()
+
+
+def _contains_term(text: str, term: str) -> bool:
+    normalized_term = _normalize_text(term)
+    if not normalized_term:
+        return False
+    return re.search(rf"(?<!\w){re.escape(normalized_term)}(?!\w)", text) is not None
+
+
+def _entity_hint_score(question: str, keywords: list[str]) -> int:
+    score = 0
+    for keyword in keywords:
+        if keyword in GENERIC_ENTITY_HINTS or not _contains_term(question, keyword):
+            continue
+        words = keyword.split()
+        if len(words) >= 2:
+            score = max(score, 4 + len(words))
+        elif len(keyword) >= 5:
+            score = max(score, 3)
+    return score
 
 
 def _is_listing_question(question: str) -> bool:

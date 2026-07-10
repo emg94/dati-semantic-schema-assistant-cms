@@ -234,13 +234,15 @@ gcloud firestore indexes composite list `
   --database="(default)"
 ```
 
-Il valore atteso e:
+I valori attesi includono l'indice vettoriale base e tre indici compositi per
+il routing per ente e risorsa:
 
 ```text
 collection group: chunks
 query scope: COLLECTION_GROUP
 vector field: embedding
 dimension: 2048
+prefilter fields: entity_id and/or resource_id
 ```
 
 La documentazione di dettaglio e in `docs/knowledge-base-design.md`.

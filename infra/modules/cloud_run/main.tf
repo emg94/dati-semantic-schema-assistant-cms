@@ -152,17 +152,12 @@ resource "google_cloud_run_v2_service" "agent" {
 
       env {
         name  = "RAG_TOP_K"
-        value = "8"
-      }
-
-      env {
-        name  = "RAG_CANDIDATE_LIMIT"
-        value = "40"
+        value = "10"
       }
 
       env {
         name  = "RAG_CONTEXT_MAX_CHARS"
-        value = "12000"
+        value = "14000"
       }
 
       env {

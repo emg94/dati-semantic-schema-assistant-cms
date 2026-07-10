@@ -118,6 +118,95 @@ resource "google_firestore_index" "rag_chunks_vector" {
   }
 }
 
+# These indexes keep vector searches inside the entity and resource selected by
+# the routing layer. They avoid fetching global nearest neighbours and filtering
+# them only after the query has completed.
+resource "google_firestore_index" "rag_chunks_entity_vector" {
+  project     = var.project_id
+  database    = google_firestore_database.default.name
+  collection  = "chunks"
+  query_scope = "COLLECTION_GROUP"
+
+  fields {
+    field_path = "entity_id"
+    order      = "ASCENDING"
+  }
+
+  fields {
+    field_path = "__name__"
+    order      = "ASCENDING"
+  }
+
+  fields {
+    field_path = "embedding"
+
+    vector_config {
+      dimension = var.embedding_vector_dimension
+
+      flat {}
+    }
+  }
+}
+
+resource "google_firestore_index" "rag_chunks_resource_vector" {
+  project     = var.project_id
+  database    = google_firestore_database.default.name
+  collection  = "chunks"
+  query_scope = "COLLECTION_GROUP"
+
+  fields {
+    field_path = "resource_id"
+    order      = "ASCENDING"
+  }
+
+  fields {
+    field_path = "__name__"
+    order      = "ASCENDING"
+  }
+
+  fields {
+    field_path = "embedding"
+
+    vector_config {
+      dimension = var.embedding_vector_dimension
+
+      flat {}
+    }
+  }
+}
+
+resource "google_firestore_index" "rag_chunks_entity_resource_vector" {
+  project     = var.project_id
+  database    = google_firestore_database.default.name
+  collection  = "chunks"
+  query_scope = "COLLECTION_GROUP"
+
+  fields {
+    field_path = "entity_id"
+    order      = "ASCENDING"
+  }
+
+  fields {
+    field_path = "resource_id"
+    order      = "ASCENDING"
+  }
+
+  fields {
+    field_path = "__name__"
+    order      = "ASCENDING"
+  }
+
+  fields {
+    field_path = "embedding"
+
+    vector_config {
+      dimension = var.embedding_vector_dimension
+
+      flat {}
+    }
+  }
+}
+
 resource "google_service_account" "agent" {
   project      = var.project_id
   account_id   = "${var.service_prefix}-agent-${var.environment}"

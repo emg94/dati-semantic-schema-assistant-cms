@@ -55,6 +55,44 @@ def test_retrieval_merges_resource_keywords_and_routing_lexicon(tmp_path: Path) 
     assert keywords["vocabularies"] == ["benefici", "vocabolario"]
 
 
+def test_retrieval_uses_entity_hints_without_matching_generic_words(tmp_path: Path) -> None:
+    pytest.importorskip("pydantic")
+    from schema_assistant.agent.retrieval import _detect_entities, _load_entity_hints
+
+    lexicon_path = tmp_path / "routing_lexicon.json"
+    lexicon_path.write_text(
+        """
+        {
+          "entity_hints": {
+            "istat": {"keywords": ["ateco", "attivita economiche", "risorse"]},
+            "inps": {"keywords": ["prestazioni pensionistiche", "servizi"]}
+          }
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    hints = _load_entity_hints(lexicon_path)
+
+    assert _detect_entities("Qual e il codice ATECO di un paninaro?", hints) == {"istat"}
+    assert _detect_entities("Mostrami le risorse disponibili", hints) == set()
+
+
+def test_retrieval_routes_ateco_questions_to_vocabularies() -> None:
+    pytest.importorskip("pydantic")
+    from schema_assistant.agent.retrieval import _detect_resources
+    from schema_assistant.knowledge_base.models import ResourceKind
+
+    keywords: dict[ResourceKind, list[str]] = {
+        "vocabularies": ["classificazione", "ateco", "codice ateco"]
+    }
+
+    assert "vocabularies" in _detect_resources(
+        "Qual e il codice ATECO di un paninaro?",
+        keywords,
+    )
+
+
 def test_catalog_resources_use_catalog_entity_filter() -> None:
     pytest.importorskip("pydantic")
     from schema_assistant.agent.retrieval import _entity_filter_for_resources

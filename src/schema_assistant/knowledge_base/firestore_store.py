@@ -263,36 +263,32 @@ class FirestoreVectorStore:
         query_vector: Sequence[float],
         *,
         limit: int = 8,
-        candidate_limit: int | None = None,
         entity_ids: set[str] | None = None,
         resource_ids: set[str] | None = None,
     ) -> list[SearchResult]:
         if limit <= 0:
             raise ValueError("limit must be positive")
 
-        fetch_limit = max(limit, candidate_limit or limit)
-        collection_group = self._client.collection_group(self._chunks_collection_group)
-        vector_query = collection_group.find_nearest(
-            vector_field=EMBEDDING_FIELD,
-            query_vector=Vector(list(query_vector)),
-            distance_measure=DistanceMeasure.COSINE,
-            limit=fetch_limit,
-            distance_result_field=DISTANCE_FIELD,
-        )
-
+        scopes = _search_scopes(entity_ids, resource_ids)
         results: list[SearchResult] = []
-        for snapshot in vector_query.stream():
-            data = snapshot.to_dict() or {}
-            if entity_ids and data.get("entity_id") not in entity_ids:
-                continue
-            if resource_ids and data.get("resource_id") not in resource_ids:
-                continue
+        for entity_id, resource_id in scopes:
+            query = self._client.collection_group(self._chunks_collection_group)
+            if entity_id:
+                query = query.where("entity_id", "==", entity_id)
+            if resource_id:
+                query = query.where("resource_id", "==", resource_id)
 
-            results.append(_search_result(snapshot.id, data))
-            if len(results) >= limit:
-                break
+            vector_query = query.find_nearest(
+                vector_field=EMBEDDING_FIELD,
+                query_vector=Vector(list(query_vector)),
+                distance_measure=DistanceMeasure.COSINE,
+                limit=limit,
+                distance_result_field=DISTANCE_FIELD,
+            )
+            for snapshot in vector_query.stream():
+                results.append(_search_result(snapshot.id, snapshot.to_dict() or {}))
 
-        return results
+        return _rank_search_results(results, limit=limit)
 
     def _chunk_ref(self, chunk: ChunkDocument) -> Any:
         return (
@@ -344,6 +340,28 @@ def _search_result(snapshot_id: str, data: dict[str, Any]) -> SearchResult:
         distance=data.get(DISTANCE_FIELD),
         metadata=data.get("metadata") or {},
     )
+
+
+def _search_scopes(
+    entity_ids: set[str] | None,
+    resource_ids: set[str] | None,
+) -> list[tuple[str | None, str | None]]:
+    entities = sorted(entity_ids) if entity_ids else [None]
+    resources = sorted(resource_ids) if resource_ids else [None]
+    return [(entity_id, resource_id) for entity_id in entities for resource_id in resources]
+
+
+def _rank_search_results(results: list[SearchResult], *, limit: int) -> list[SearchResult]:
+    deduplicated: dict[str, SearchResult] = {}
+    for result in results:
+        existing = deduplicated.get(result.chunk_id)
+        if existing is None or _distance(result) < _distance(existing):
+            deduplicated[result.chunk_id] = result
+    return sorted(deduplicated.values(), key=_distance)[:limit]
+
+
+def _distance(result: SearchResult) -> float:
+    return result.distance if result.distance is not None else float("inf")
 
 
 def _metadata_result(data: dict[str, Any]) -> MetadataSearchResult:

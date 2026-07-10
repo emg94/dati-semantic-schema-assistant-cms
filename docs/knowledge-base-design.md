@@ -62,10 +62,11 @@ produrre vettori piu grandi.
 
 ## Query
 
-La query vettoriale iniziale lavora sulla collection group `chunks`. Il filtro
-per ente e tipo risorsa viene applicato nel codice sui candidati restituiti.
-Quando avremo dati reali e misure di costo/qualita, potremo aggiungere indici
-compositi con pre-filter Firestore per i percorsi piu frequenti.
+La query vettoriale lavora sulla collection group `chunks`. Quando il routing
+individua un ente, un tipo di risorsa o entrambi, Firestore applica il filtro
+prima della ricerca di vicinanza. Gli indici compositi su `entity_id`,
+`resource_id` ed `embedding` evitano di leggere risultati globali non
+pertinenti per poi scartarli nell'applicazione.
 
 Per domande di elenco o conteggio l'agent usa prima `asset_index`, se la domanda
 contiene abbastanza segnali per individuare ente e tipo risorsa. Il vector search
@@ -77,7 +78,9 @@ Il routing usa due livelli:
 
 - `config/resources.json` definisce le risorse tecniche disponibili.
 - `config/routing_lexicon.json` contiene sinonimi e termini di dominio, come
-  classificazioni, benefici, prestazioni SIUSS e superstiti.
+  classificazioni, benefici, prestazioni SIUSS e superstiti, insieme ai segnali
+  storici per associare una domanda a un ente. I termini generici non bastano a
+  restringere la ricerca: servono solo i segnali distintivi.
 
 ## Ingestion
 
