@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -48,6 +49,40 @@ ex:item a skos:Concept ;
     assert parsed.processed_payload["triple_count"] >= 3
 
 
+def test_parse_pdf_tracks_text_coverage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    source_path = tmp_path / "guide.pdf"
+    source_path.write_bytes(b"%PDF-1.4")
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "pdfplumber",
+        SimpleNamespace(open=lambda _path: _FakePdf(["Prima pagina", "", "Terza pagina"])),
+    )
+
+    parsed = AssetParser().parse(_source(source_path, "context_documents"))
+
+    assert "Pagina 1" in parsed.content
+    assert "Pagina 3" in parsed.content
+    assert parsed.processed_payload["page_count"] == 3
+    assert parsed.processed_payload["text_page_count"] == 2
+    assert parsed.processed_payload["extracted_chars"] > 0
+
+
+def test_parse_pdf_rejects_documents_without_text(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_path = tmp_path / "scan.pdf"
+    source_path.write_bytes(b"%PDF-1.4")
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "pdfplumber",
+        SimpleNamespace(open=lambda _path: _FakePdf(["", ""])),
+    )
+
+    with pytest.raises(ValueError, match="require OCR"):
+        AssetParser().parse(_source(source_path, "context_documents"))
+
+
 def _source(path: Path, resource_id: str) -> SourceFile:
     return SourceFile(
         entity_id="istat",
@@ -56,3 +91,22 @@ def _source(path: Path, resource_id: str) -> SourceFile:
         relative_path=path.name,
         source_uri=f"file://{path.name}",
     )
+
+
+class _FakePage:
+    def __init__(self, text: str) -> None:
+        self._text = text
+
+    def extract_text(self) -> str:
+        return self._text
+
+
+class _FakePdf:
+    def __init__(self, page_texts: list[str]) -> None:
+        self.pages = [_FakePage(text) for text in page_texts]
+
+    def __enter__(self) -> "_FakePdf":
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        return None

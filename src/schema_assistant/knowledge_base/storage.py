@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from pathlib import Path
 from typing import cast
 
 from google.cloud import storage
@@ -47,6 +48,11 @@ class ObjectStorage:
     def download_text(self, object_path: str) -> str:
         blob = self._bucket.blob(_clean_object_path(object_path))
         return cast(str, blob.download_as_text(encoding="utf-8"))
+
+    def download_to_path(self, object_path: str, destination: Path) -> None:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        blob = self._bucket.blob(_clean_object_path(object_path))
+        blob.download_to_filename(str(destination))
 
     def exists(self, object_path: str) -> bool:
         blob = self._bucket.blob(_clean_object_path(object_path))

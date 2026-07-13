@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Protocol
+
+from schema_assistant.knowledge_base.paths import stable_hash
 
 if TYPE_CHECKING:
     from schema_assistant.knowledge_base.models import ResourceKind
@@ -16,6 +19,16 @@ class EntityLike(Protocol):
     vocabularies_folder: str
 
 
+class StorageDocsReader(Protocol):
+    bucket_name: str
+
+    def list_paths(self, prefix: str) -> Iterable[str]: ...
+
+    def download_to_path(self, object_path: str, destination: Path) -> None: ...
+
+    def uri_for(self, object_path: str) -> str: ...
+
+
 @dataclass(frozen=True)
 class SourceFile:
     entity_id: str
@@ -24,6 +37,7 @@ class SourceFile:
     relative_path: str
     source_uri: str
     repo_url: str | None = None
+    origin_storage_uri: str | None = None
 
 
 def discover_entity_files(entity: EntityLike, repo_dir: Path, assets_dir: Path) -> list[SourceFile]:
@@ -78,6 +92,47 @@ def discover_local_docs(docs_dir: Path) -> list[SourceFile]:
     return files
 
 
+def discover_storage_docs(
+    storage: StorageDocsReader,
+    prefix: str,
+    target_dir: Path,
+) -> list[SourceFile]:
+    clean_prefix = prefix.replace("\\", "/").strip("/")
+    prefix_with_separator = f"{clean_prefix}/"
+    files: list[SourceFile] = []
+
+    for object_path in sorted(storage.list_paths(clean_prefix)):
+        if not object_path.startswith(prefix_with_separator):
+            continue
+
+        relative_path = object_path[len(prefix_with_separator) :]
+        relative = PurePosixPath(relative_path)
+        suffix = relative.suffix.lower()
+        if (
+            not relative_path
+            or suffix not in {".pdf", ".csv"}
+            or any(part.startswith(".") for part in relative.parts)
+        ):
+            continue
+
+        local_path = target_dir / f"{stable_hash(object_path, length=24)}{suffix}"
+        storage.download_to_path(object_path, local_path)
+        storage_uri = storage.uri_for(object_path)
+        resource_id: ResourceKind = "dates_collection" if suffix == ".csv" else "context_documents"
+        files.append(
+            SourceFile(
+                entity_id="catalog",
+                resource_id=resource_id,
+                path=local_path,
+                relative_path=relative_path,
+                source_uri=storage_uri,
+                origin_storage_uri=storage_uri,
+            )
+        )
+
+    return files
+
+
 def _iter_supported_files(root: Path, extensions: tuple[str, ...]) -> list[Path]:
     lower_extensions = tuple(item.lower() for item in extensions)
     return sorted(
@@ -85,7 +140,7 @@ def _iter_supported_files(root: Path, extensions: tuple[str, ...]) -> list[Path]
         for path in root.rglob("*")
         if path.is_file()
         and path.suffix.lower() in lower_extensions
-        and not any(part.startswith(".") for part in path.parts)
+        and not any(part.startswith(".") for part in path.relative_to(root).parts)
     )
 
 

@@ -100,6 +100,16 @@ def test_catalog_resources_use_catalog_entity_filter() -> None:
     assert _entity_filter_for_resources({"istat"}, {"dates_collection"}) == {"catalog"}
 
 
+def test_context_documents_are_used_as_secondary_retrieval_channel() -> None:
+    pytest.importorskip("pydantic")
+    from schema_assistant.agent.retrieval import _should_search_context_documents
+
+    assert _should_search_context_documents({"istat"}, {"vocabularies"})
+    assert not _should_search_context_documents(None, set())
+    assert not _should_search_context_documents({"catalog"}, {"dates_collection"})
+    assert not _should_search_context_documents({"catalog"}, {"context_documents"})
+
+
 def test_retrieval_context_does_not_include_source_markers() -> None:
     pytest.importorskip("pydantic")
     from schema_assistant.agent.retrieval import _build_context

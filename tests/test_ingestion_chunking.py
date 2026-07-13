@@ -14,3 +14,12 @@ def test_chunk_text_splits_with_overlap() -> None:
 
     assert len(chunks) == 2
     assert chunks[1].startswith("aaaaa")
+
+
+def test_chunk_text_prefers_readable_boundaries() -> None:
+    text = "Prima frase completa. Seconda frase completa. Terza frase molto lunga."
+
+    chunks = chunk_text(text, max_chars=45, overlap_chars=5)
+
+    assert chunks[0].endswith(".")
+    assert all(len(chunk) <= 45 for chunk in chunks)

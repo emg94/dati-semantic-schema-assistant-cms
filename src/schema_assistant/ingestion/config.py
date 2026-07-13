@@ -32,6 +32,10 @@ class IngestionSettings(BaseSettings):
         alias="ENTITIES_CONFIG_PATH",
     )
     local_docs_dir: Path | None = Field(default=None, alias="INGESTION_DOCS_DIR")
+    gcs_docs_prefix: str | None = Field(
+        default=None,
+        alias="INGESTION_GCS_DOCS_PREFIX",
+    )
 
     max_chunk_chars: int = Field(default=3500, alias="INGESTION_MAX_CHUNK_CHARS")
     chunk_overlap_chars: int = Field(default=300, alias="INGESTION_CHUNK_OVERLAP_CHARS")
@@ -71,6 +75,16 @@ class IngestionSettings(BaseSettings):
         if value > 450:
             raise ValueError("Firestore batch size cannot be higher than 450")
         return value
+
+    @field_validator("gcs_docs_prefix")
+    @classmethod
+    def _valid_gcs_docs_prefix(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.replace("\\", "/").strip("/")
+        if not cleaned or ".." in cleaned.split("/"):
+            raise ValueError("GCS docs prefix must be a safe object prefix")
+        return cleaned
 
 
 @lru_cache(maxsize=1)

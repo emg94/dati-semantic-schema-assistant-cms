@@ -250,8 +250,9 @@ La documentazione di dettaglio e in `docs/knowledge-base-design.md`.
 ## 8. Build e deploy job ingestion
 
 Il job ingestion e manuale: non esiste scheduler. Il container clona i repo
-GitHub in `/tmp`, salva raw e processed assets su Cloud Storage, genera
-embedding con Vertex AI e scrive i chunk in Firestore.
+GitHub in `/tmp`, legge PDF e CSV da `incoming/docs/` nello stesso bucket,
+salva gli asset processati su Cloud Storage, genera embedding con Vertex AI e
+scrive i chunk in Firestore.
 
 Il container usa la virtualenv creata da `uv sync`; il `PATH` punta quindi a
 `/app/.venv/bin` per rendere importabile il package `schema_assistant`.
@@ -288,6 +289,21 @@ gcloud builds submit `
   .
 ```
 
+Prima di eseguire il job, carica i documenti sorgente nel bucket. In PowerShell:
+
+```powershell
+$BUCKET = "istat-ndc-schema-ass-cms-dev-schema-assistant-dev-data"
+
+Get-ChildItem "schema-assistant-da-migrare\docs" -File |
+  Where-Object { $_.Extension -in ".pdf", ".csv" } |
+  ForEach-Object {
+    gcloud storage cp $_.FullName "gs://$BUCKET/incoming/docs/$($_.Name)"
+  }
+```
+
+La cartella temporanea serve solo come origine per questo caricamento manuale:
+il container e la knowledge base non la usano a runtime.
+
 Aggiorna il Cloud Run Job:
 
 ```powershell
@@ -314,6 +330,11 @@ gcloud run jobs executions list `
   --project istat-ndc-schema-ass-cms-dev `
   --region europe-west8
 ```
+
+Nel report finale deve comparire l'ente `catalog`, con `files` pari al numero di
+PDF/CSV scoperti e con contatori `context_documents` e `dates_collection`
+maggiori di zero. Se un PDF non contiene testo estraibile, il job termina con
+errore e il report indica che il documento richiede OCR.
 
 Per fare una prova senza scrivere su Storage/Firestore, usa temporaneamente:
 

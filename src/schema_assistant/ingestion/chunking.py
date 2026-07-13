@@ -43,12 +43,27 @@ def _split_long_text(text: str, *, max_chars: int, overlap_chars: int) -> list[s
     chunks = []
     start = 0
     while start < len(text):
-        end = min(start + max_chars, len(text))
+        hard_end = min(start + max_chars, len(text))
+        end = _preferred_split_position(text, start=start, hard_end=hard_end)
         chunks.append(text[start:end].strip())
         if end == len(text):
             break
-        start = max(0, end - overlap_chars)
+        start = max(start + 1, end - overlap_chars)
     return [chunk for chunk in chunks if chunk]
+
+
+def _preferred_split_position(text: str, *, start: int, hard_end: int) -> int:
+    if hard_end >= len(text):
+        return len(text)
+
+    minimum_end = start + int((hard_end - start) * 0.6)
+    window = text[start:hard_end]
+    for separator in ("\n", ".", ";", ",", " "):
+        position = window.rfind(separator)
+        candidate = start + position + len(separator)
+        if position >= 0 and candidate >= minimum_end:
+            return candidate
+    return hard_end
 
 
 def _with_overlap(previous: str, next_paragraph: str, overlap_chars: int) -> str:

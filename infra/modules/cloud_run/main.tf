@@ -304,8 +304,8 @@ resource "google_cloud_run_v2_job" "ingestion" {
         }
 
         env {
-          name  = "INGESTION_DOCS_DIR"
-          value = "knowledge_base_docs"
+          name  = "INGESTION_GCS_DOCS_PREFIX"
+          value = "incoming/docs"
         }
 
         env {

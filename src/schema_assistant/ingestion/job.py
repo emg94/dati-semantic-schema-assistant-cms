@@ -13,6 +13,7 @@ from schema_assistant.ingestion.discovery import (
     SourceFile,
     discover_entity_files,
     discover_local_docs,
+    discover_storage_docs,
 )
 from schema_assistant.ingestion.entities import EntityConfig, load_entities_config
 from schema_assistant.ingestion.github import clone_repository, resolve_assets_dir
@@ -71,7 +72,7 @@ def run_ingestion(settings: IngestionSettings) -> IngestionReport:
 
     with tempfile.TemporaryDirectory(prefix="schema-assistant-ingestion-") as tmp_dir_name:
         tmp_dir = Path(tmp_dir_name)
-        sources = _collect_sources(entities, settings, tmp_dir)
+        sources = _collect_sources(entities, settings, storage, tmp_dir)
         report.files_seen = len(sources)
 
         for source in sources:
@@ -98,6 +99,7 @@ def run_ingestion(settings: IngestionSettings) -> IngestionReport:
 def _collect_sources(
     entities: list[EntityConfig],
     settings: IngestionSettings,
+    storage: ObjectStorage,
     tmp_dir: Path,
 ) -> list[SourceFile]:
     sources: list[SourceFile] = []
@@ -114,6 +116,15 @@ def _collect_sources(
     if settings.local_docs_dir:
         sources.extend(discover_local_docs(settings.local_docs_dir))
 
+    if settings.gcs_docs_prefix:
+        sources.extend(
+            discover_storage_docs(
+                storage,
+                settings.gcs_docs_prefix,
+                tmp_dir / "storage-docs",
+            )
+        )
+
     return sources
 
 
@@ -129,6 +140,18 @@ def _process_source(
     report: IngestionReport,
 ) -> None:
     parsed = parser.parse(source)
+    if parsed.content_type == "application/pdf":
+        total_pages = int(parsed.processed_payload.get("page_count") or 0)
+        text_pages = int(parsed.processed_payload.get("text_page_count") or 0)
+        if text_pages < total_pages:
+            logger.warning(
+                "ingestion_pdf_partial_text",
+                extra={
+                    "source_uri": source.source_uri,
+                    "total_pages": total_pages,
+                    "text_pages": text_pages,
+                },
+            )
     raw_storage_uri = _upload_raw_asset(storage, paths, parsed, settings.dry_run)
     processed_storage_uri = _upload_processed_asset(storage, paths, parsed, settings.dry_run)
     chunks = chunk_text(
@@ -143,7 +166,7 @@ def _process_source(
             entity_id=source.entity_id,
             resource_id=source.resource_id,
             chunks=0,
-            raw_written=bool(raw_storage_uri),
+            raw_written=bool(raw_storage_uri) and not bool(source.origin_storage_uri),
             processed_written=bool(processed_storage_uri),
         )
         return
@@ -243,7 +266,7 @@ def _process_source(
         entity_id=source.entity_id,
         resource_id=source.resource_id,
         chunks=written,
-        raw_written=bool(raw_storage_uri),
+        raw_written=bool(raw_storage_uri) and not bool(source.origin_storage_uri),
         processed_written=bool(processed_storage_uri),
     )
     logger.info(
@@ -308,6 +331,8 @@ def _upload_raw_asset(
     dry_run: bool,
 ) -> str | None:
     source = parsed.source
+    if source.origin_storage_uri:
+        return source.origin_storage_uri
     if source.repo_url:
         object_path = paths.github_raw_object_path(
             source.entity_id,
@@ -412,6 +437,8 @@ def _asset_metadata_document(
             "subject_count": payload.get("subject_count"),
             "row_count": payload.get("row_count"),
             "page_count": payload.get("page_count"),
+            "text_page_count": payload.get("text_page_count"),
+            "extracted_chars": payload.get("extracted_chars"),
         },
     )
 

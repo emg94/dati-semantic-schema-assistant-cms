@@ -145,11 +145,22 @@ class AssetParser:
 
         pages: list[str] = []
         with pdfplumber.open(path) as pdf:
+            total_page_count = len(pdf.pages)
             for index, page in enumerate(pdf.pages, start=1):
                 page_text = page.extract_text() or ""
                 if page_text.strip():
                     pages.append(f"Pagina {index}\n{page_text.strip()}")
-        return "\n\n".join(pages), {"format": "pdf", "page_count": len(pages)}
+
+        content = "\n\n".join(pages)
+        if not content.strip():
+            raise ValueError("PDF without extractable text; the document may require OCR")
+
+        return content, {
+            "format": "pdf",
+            "page_count": total_page_count,
+            "text_page_count": len(pages),
+            "extracted_chars": len(content),
+        }
 
     @staticmethod
     def _parse_csv(path: Path) -> tuple[str, dict[str, Any]]:

@@ -45,6 +45,7 @@ class RetrievalResult:
     detected_entities: set[str]
     detected_resources: set[str]
     listing_question: bool
+    context_document_chunks: int
 
 
 class KnowledgeBaseRetriever:
@@ -94,6 +95,14 @@ class KnowledgeBaseRetriever:
             entity_ids=entity_filter,
             resource_ids=detected_resources or None,
         )
+        if _should_search_context_documents(entity_filter, detected_resources):
+            document_chunks = self._store.search(
+                query_vector,
+                limit=max(3, min(6, self._settings.rag_top_k // 2)),
+                entity_ids={"catalog"},
+                resource_ids={"context_documents"},
+            )
+            chunks = _merge_search_results(chunks, document_chunks, limit=search_limit)
 
         context = _join_contexts(
             _build_metadata_context(metadata_assets),
@@ -110,6 +119,9 @@ class KnowledgeBaseRetriever:
             detected_entities=detected_entities,
             detected_resources=detected_resources,
             listing_question=listing_question,
+            context_document_chunks=sum(
+                chunk.resource_id == "context_documents" for chunk in chunks
+            ),
         )
 
     def _metadata_assets(
@@ -239,6 +251,39 @@ def _entity_filter_for_resources(
     if detected_resources and detected_resources.issubset(CATALOG_RESOURCES):
         return {"catalog"}
     return detected_entities or None
+
+
+def _should_search_context_documents(
+    entity_filter: set[str] | None,
+    detected_resources: set[str],
+) -> bool:
+    if entity_filter is None and not detected_resources:
+        return False
+    if detected_resources == {"dates_collection"}:
+        return False
+    return not (
+        entity_filter is not None
+        and "catalog" in entity_filter
+        and "context_documents" in detected_resources
+    )
+
+
+def _merge_search_results(
+    primary: list[SearchResult],
+    secondary: list[SearchResult],
+    *,
+    limit: int,
+) -> list[SearchResult]:
+    deduplicated: dict[str, SearchResult] = {}
+    for result in [*primary, *secondary]:
+        existing = deduplicated.get(result.chunk_id)
+        if existing is None or _search_distance(result) < _search_distance(existing):
+            deduplicated[result.chunk_id] = result
+    return sorted(deduplicated.values(), key=_search_distance)[:limit]
+
+
+def _search_distance(result: SearchResult) -> float:
+    return result.distance if result.distance is not None else float("inf")
 
 
 def _build_context(chunks: list[SearchResult], *, max_chars: int) -> str:

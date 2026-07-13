@@ -10,18 +10,22 @@ viene usato per salvare conversazioni.
 
 ## Cloud Storage
 
-I prefissi sono separati per rendere chiaro cosa e stato scaricato, cosa e stato
-processato e cosa arriva dai documenti statici:
+I prefissi sono separati per rendere chiaro cosa e stato caricato dagli
+operatori, cosa e stato scaricato e cosa e stato processato:
 
 ```text
+incoming/docs/{filename}
 raw/github/{ente}/{risorsa}/{source_hash}/{path_file}
 raw/docs/{source_hash}/{filename}
 processed/{ente}/{risorsa}/{source_hash}.json
 reports/ingestion/{timestamp}.json
 ```
 
-Questa struttura permette di ricaricare un solo ente o una sola risorsa senza
-riscrivere tutto il bucket.
+`incoming/docs/` e la sorgente dei PDF e CSV gestiti manualmente. Il job li
+scarica in `/tmp`, senza incorporarli nell'immagine Docker. `raw/docs/` resta
+disponibile per eventuali documenti locali usati in sviluppo. Questa struttura
+permette di aggiornare un documento o una risorsa senza ricostruire tutto il
+bucket.
 
 ## Firestore
 
@@ -74,6 +78,12 @@ resta il canale principale per domande semantiche o descrittive, mentre
 `asset_index` riduce i casi in cui una domanda di catalogo viene trattata come
 una ricerca testuale generica.
 
+Quando il routing restringe la ricerca a un ente o a una risorsa, l'agent esegue
+anche una ricerca documentale secondaria limitata su
+`catalog/context_documents`. Usa lo stesso embedding della domanda e recupera
+al massimo pochi chunk aggiuntivi, cosi una guida pertinente non viene esclusa
+dal filtro principale.
+
 Il routing usa due livelli:
 
 - `config/resources.json` definisce le risorse tecniche disponibili.
@@ -93,8 +103,11 @@ cartella concetto cerca prima `latest/` e prende solo i file supportati presenti
 li. Se una cartella concetto non ha `latest/`, viene usato il fallback ricorsivo
 per gestire repository non allineati a quella convenzione.
 
-I documenti statici PDF/CSV vanno messi in `knowledge_base_docs/`. La cartella
-puo restare vuota: il job continua a processare i repository GitHub.
+I documenti statici PDF/CSV vanno caricati nel prefisso GCS
+`incoming/docs/`. I PDF senza un livello testuale vengono segnalati come errori
+perche richiedono OCR; i PDF parzialmente leggibili producono un warning con il
+numero di pagine estratte. `INGESTION_DOCS_DIR` resta disponibile solo per test
+locali mirati.
 
 La re-ingestion e incrementale: le source con stesso URI, stesso hash e stato
 `completed` vengono saltate. Le source in stato `processing`, ad esempio dopo un

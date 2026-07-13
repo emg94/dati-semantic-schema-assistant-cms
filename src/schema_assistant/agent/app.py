@@ -183,6 +183,9 @@ def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JSONResp
             "rag_listing_question": retrieval_result.listing_question
             if retrieval_result
             else False,
+            "rag_context_document_chunks": retrieval_result.context_document_chunks
+            if retrieval_result
+            else 0,
         },
     )
 

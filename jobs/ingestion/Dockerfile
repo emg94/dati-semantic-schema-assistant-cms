@@ -15,7 +15,6 @@ COPY --from=ghcr.io/astral-sh/uv:0.11.26 /uv /usr/local/bin/uv
 
 COPY pyproject.toml uv.lock ./
 COPY config ./config
-COPY knowledge_base_docs ./knowledge_base_docs
 COPY src ./src
 
 RUN uv sync --frozen --no-dev --no-editable --extra ingestion
