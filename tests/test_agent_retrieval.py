@@ -159,6 +159,35 @@ def test_retrieval_context_removes_source_lines_from_chunk_content() -> None:
     assert "https://w3id.org/italia/work-accident/onto/core/" not in context
 
 
+def test_retrieval_discards_chunks_outside_the_relevance_threshold() -> None:
+    pytest.importorskip("pydantic")
+    from schema_assistant.agent.retrieval import _filter_relevant_chunks
+    from schema_assistant.knowledge_base.models import SearchResult
+
+    chunks = [
+        SearchResult(
+            chunk_id="relevant",
+            entity_id="istat",
+            resource_id="vocabularies",
+            content="Classificazione ATECO",
+            source_uri="https://example.org/ateco",
+            distance=0.22,
+        ),
+        SearchResult(
+            chunk_id="unrelated",
+            entity_id="inail",
+            resource_id="vocabularies",
+            content="Agenti causali degli infortuni",
+            source_uri="https://example.org/inail",
+            distance=0.71,
+        ),
+    ]
+
+    assert [chunk.chunk_id for chunk in _filter_relevant_chunks(chunks, max_distance=0.45)] == [
+        "relevant"
+    ]
+
+
 def test_retrieval_detects_listing_questions() -> None:
     pytest.importorskip("pydantic")
     from schema_assistant.agent.retrieval import _is_listing_question

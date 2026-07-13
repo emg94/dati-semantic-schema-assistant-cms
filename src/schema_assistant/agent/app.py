@@ -143,6 +143,40 @@ def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JSONResp
                     request_id=request_id,
                 ).model_dump(),
             )
+        if not retrieval_result.has_relevant_context:
+            logger.info(
+                "chat_out_of_scope",
+                extra={
+                    "request_id": request_id,
+                    "rag_best_distance": retrieval_result.best_distance,
+                    "rag_max_distance": settings.rag_max_distance,
+                    "rag_discarded_chunks": retrieval_result.discarded_chunks,
+                },
+            )
+            return ChatResponse(
+                answer=(
+                    "Posso rispondere solo usando le informazioni presenti nel catalogo "
+                    "e nelle risorse semantiche disponibili nella knowledge base. "
+                    "Non ho contenuti pertinenti per questa domanda."
+                ),
+                sources=[],
+                usage=ChatUsage(input_tokens=0, output_tokens=0, total_tokens=0),
+                cost_status=settings.cost_status,
+                rag_enabled=True,
+                request_id=request_id,
+            )
+    else:
+        return ChatResponse(
+            answer=(
+                "La knowledge base non e abilitata: non posso rispondere a domande "
+                "che richiedono contenuti del catalogo."
+            ),
+            sources=[],
+            usage=ChatUsage(input_tokens=0, output_tokens=0, total_tokens=0),
+            cost_status=settings.cost_status,
+            rag_enabled=False,
+            request_id=request_id,
+        )
 
     try:
         result = get_vertex_chat_client().answer(
@@ -186,6 +220,9 @@ def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JSONResp
             "rag_context_document_chunks": retrieval_result.context_document_chunks
             if retrieval_result
             else 0,
+            "rag_best_distance": retrieval_result.best_distance if retrieval_result else None,
+            "rag_max_distance": settings.rag_max_distance,
+            "rag_discarded_chunks": retrieval_result.discarded_chunks if retrieval_result else 0,
         },
     )
 

@@ -46,6 +46,9 @@ class RetrievalResult:
     detected_resources: set[str]
     listing_question: bool
     context_document_chunks: int
+    has_relevant_context: bool
+    best_distance: float | None
+    discarded_chunks: int
 
 
 class KnowledgeBaseRetriever:
@@ -104,6 +107,14 @@ class KnowledgeBaseRetriever:
             )
             chunks = _merge_search_results(chunks, document_chunks, limit=search_limit)
 
+        best_distance = _best_distance(chunks)
+        discarded_chunks = len(chunks)
+        chunks = _filter_relevant_chunks(chunks, max_distance=self._settings.rag_max_distance)
+        discarded_chunks -= len(chunks)
+        has_relevant_context = bool(chunks)
+        if not has_relevant_context:
+            metadata_assets = []
+
         context = _join_contexts(
             _build_metadata_context(metadata_assets),
             _build_context(chunks, max_chars=context_max_chars) if chunks else None,
@@ -122,6 +133,9 @@ class KnowledgeBaseRetriever:
             context_document_chunks=sum(
                 chunk.resource_id == "context_documents" for chunk in chunks
             ),
+            has_relevant_context=has_relevant_context,
+            best_distance=best_distance,
+            discarded_chunks=discarded_chunks,
         )
 
     def _metadata_assets(
@@ -284,6 +298,19 @@ def _merge_search_results(
 
 def _search_distance(result: SearchResult) -> float:
     return result.distance if result.distance is not None else float("inf")
+
+
+def _best_distance(chunks: list[SearchResult]) -> float | None:
+    best_distance = min((_search_distance(chunk) for chunk in chunks), default=float("inf"))
+    return best_distance if best_distance != float("inf") else None
+
+
+def _filter_relevant_chunks(
+    chunks: list[SearchResult],
+    *,
+    max_distance: float,
+) -> list[SearchResult]:
+    return [chunk for chunk in chunks if _search_distance(chunk) <= max_distance]
 
 
 def _build_context(chunks: list[SearchResult], *, max_chars: int) -> str:

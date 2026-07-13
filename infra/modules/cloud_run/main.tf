@@ -161,6 +161,11 @@ resource "google_cloud_run_v2_service" "agent" {
       }
 
       env {
+        name  = "RAG_MAX_DISTANCE"
+        value = "0.45"
+      }
+
+      env {
         name  = "RESOURCES_CONFIG_PATH"
         value = "config/resources.json"
       }

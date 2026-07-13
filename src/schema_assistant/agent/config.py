@@ -27,6 +27,7 @@ class AgentSettings(BaseSettings):
     rag_enabled: bool = Field(default=False, alias="RAG_ENABLED")
     rag_top_k: int = Field(default=8, alias="RAG_TOP_K")
     rag_context_max_chars: int = Field(default=12000, alias="RAG_CONTEXT_MAX_CHARS")
+    rag_max_distance: float = Field(default=0.45, alias="RAG_MAX_DISTANCE")
     resources_config_path: Path = Field(
         default=Path("config/resources.json"),
         alias="RESOURCES_CONFIG_PATH",
@@ -74,6 +75,13 @@ class AgentSettings(BaseSettings):
     def _non_negative_int(cls, value: int) -> int:
         if value < 0:
             raise ValueError("value cannot be negative")
+        return value
+
+    @field_validator("rag_max_distance")
+    @classmethod
+    def _valid_rag_max_distance(cls, value: float) -> float:
+        if not 0 < value <= 2:
+            raise ValueError("rag_max_distance must be greater than 0 and no higher than 2")
         return value
 
 

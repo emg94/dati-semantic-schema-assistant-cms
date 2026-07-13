@@ -210,6 +210,11 @@ Con la knowledge base popolata, l'agent usa `RAG_ENABLED=true`: genera embedding
 della domanda, cerca i chunk su Firestore Vector e passa al modello solo il
 contesto recuperato. Le fonti sono restituite nel campo `sources`.
 
+L'agent risponde solo quando almeno un chunk rientra nella soglia
+`RAG_MAX_DISTANCE=0.45`. Se la domanda e fuori dal perimetro delle collection,
+la richiesta termina prima della chiamata al modello, senza consumo di token
+chat e senza usare il risultato semanticamente piu vicino ma non pertinente.
+
 ## 7. Firestore Vector e Storage Knowledge Base
 
 La Fase 3 aggiunge la struttura della knowledge base, ma lascia `RAG_ENABLED=false`. In questo
