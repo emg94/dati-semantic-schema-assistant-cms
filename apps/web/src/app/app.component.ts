@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import {
   AfterViewInit,
   Component,
@@ -21,6 +21,9 @@ interface ChatMessage {
 interface AgentResponse {
   answer: string;
 }
+
+const MAX_HISTORY_MESSAGES = 12;
+const MAX_HISTORY_MESSAGE_CHARS = 2_000;
 
 @Component({
   selector: 'app-root',
@@ -102,11 +105,11 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
           this.pushMessage('assistant', response.answer);
           this.loading = false;
         },
-        error: (error) => {
+        error: (error: HttpErrorResponse) => {
           console.error("Errore durante l'invio del messaggio:", error);
           this.pushMessage(
             'assistant',
-            'Assistente temporaneamente non disponibile. Riprova piu tardi.',
+            this.safeErrorMessage(error),
             true,
           );
           this.loading = false;
@@ -156,8 +159,27 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   private chatHistory(): Array<Pick<ChatMessage, 'role' | 'content'>> {
     return this.activeChatMessages
       .filter((message) => !message.error)
-      .slice(-12)
-      .map(({ role, content }) => ({ role, content }));
+      .slice(-MAX_HISTORY_MESSAGES)
+      .map(({ role, content }) => ({
+        role,
+        content: this.historyContent(content),
+      }));
+  }
+
+  private historyContent(content: string): string {
+    if (content.length <= MAX_HISTORY_MESSAGE_CHARS) return content;
+
+    const marker = '\n[contenuto precedente abbreviato]\n';
+    const availableChars = MAX_HISTORY_MESSAGE_CHARS - marker.length;
+    const leadingChars = Math.floor(availableChars * 0.75);
+    const trailingChars = availableChars - leadingChars;
+    return `${content.slice(0, leadingChars)}${marker}${content.slice(-trailingChars)}`;
+  }
+
+  private safeErrorMessage(error: HttpErrorResponse): string {
+    const detail = error.error?.detail;
+    if (typeof detail === 'string' && detail.trim()) return detail;
+    return 'Assistente temporaneamente non disponibile. Riprova piu tardi.';
   }
 
   private seedIntroMessage(): void {
