@@ -57,3 +57,15 @@ output "web_url" {
 output "ingestion_job_name" {
   value = module.cloud_run.ingestion_job_name
 }
+
+output "github_actions_service_account_email" {
+  value = module.github_actions.service_account_email
+}
+
+output "github_actions_workload_identity_provider" {
+  value = module.github_actions.workload_identity_provider_name
+}
+
+output "github_actions_repository" {
+  value = var.github_repository
+}

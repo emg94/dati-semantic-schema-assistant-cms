@@ -69,3 +69,25 @@ module "cloud_run" {
 
   depends_on = [module.foundation]
 }
+
+module "github_actions" {
+  source = "../../modules/github_actions"
+
+  project_id                      = var.project_id
+  region                          = var.region
+  environment                     = var.environment
+  service_prefix                  = var.service_prefix
+  artifact_registry_repository_id = var.artifact_registry_repository_id
+  github_repository               = var.github_repository
+  github_repository_id            = var.github_repository_id
+  github_repository_owner_id      = var.github_repository_owner_id
+  github_deploy_branch            = var.github_deploy_branch
+  agent_service_name              = module.cloud_run.agent_service_name
+  web_service_name                = module.cloud_run.web_service_name
+  ingestion_job_name              = module.cloud_run.ingestion_job_name
+  agent_service_account_email     = module.foundation.agent_service_account_email
+  ingestion_service_account_email = module.foundation.ingestion_service_account_email
+  web_service_account_email       = module.foundation.web_service_account_email
+
+  depends_on = [module.cloud_run]
+}

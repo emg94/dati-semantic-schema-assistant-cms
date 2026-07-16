@@ -52,12 +52,58 @@ variable "enabled_services" {
     "datastore.googleapis.com",
     "firestore.googleapis.com",
     "iam.googleapis.com",
+    "iamcredentials.googleapis.com",
     "logging.googleapis.com",
     "monitoring.googleapis.com",
     "run.googleapis.com",
     "secretmanager.googleapis.com",
     "storage.googleapis.com",
+    "sts.googleapis.com",
   ]
+}
+
+variable "github_repository" {
+  description = "GitHub repository allowed to deploy to dev, in owner/name format."
+  type        = string
+  default     = "emg94/dati-semantic-schema-assistant-cms"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", var.github_repository))
+    error_message = "github_repository must use the owner/name format."
+  }
+}
+
+variable "github_repository_id" {
+  description = "Immutable numeric GitHub repository id allowed to deploy to dev."
+  type        = string
+  default     = "1291172038"
+
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_repository_id))
+    error_message = "github_repository_id must be the numeric id returned by the GitHub API."
+  }
+}
+
+variable "github_repository_owner_id" {
+  description = "Immutable numeric GitHub owner id allowed to deploy to dev."
+  type        = string
+  default     = "32837524"
+
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_repository_owner_id))
+    error_message = "github_repository_owner_id must be the numeric id returned by the GitHub API."
+  }
+}
+
+variable "github_deploy_branch" {
+  description = "Only this branch can exchange GitHub OIDC tokens for dev credentials."
+  type        = string
+  default     = "main"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9._/-]+$", var.github_deploy_branch))
+    error_message = "github_deploy_branch contains unsupported characters."
+  }
 }
 
 variable "bucket_name" {

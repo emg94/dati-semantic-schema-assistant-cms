@@ -24,3 +24,4 @@ docs/
 infra/
 README.md
 schema-assistant-da-migrare/
+gha-creds-*.json

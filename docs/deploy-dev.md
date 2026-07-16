@@ -4,6 +4,11 @@ Questa guida contiene solo comandi da lanciare manualmente. Terraform gestisce
 infrastruttura, IAM, configurazione Cloud Run e servizi Google Cloud. I deploy
 applicativi passano da Cloud Build e `gcloud run services update`.
 
+La pipeline GitHub Actions e il bootstrap Workload Identity Federation sono
+documentati in `docs/github-actions-cicd.md`. Dopo la loro attivazione, Cloud
+Build resta un fallback manuale; i deploy ordinari da `main` usano immagini con
+tag basato sul commit e aggiornamenti Cloud Run per digest.
+
 ## 1. Prerequisiti locali
 
 Installa o verifica:
