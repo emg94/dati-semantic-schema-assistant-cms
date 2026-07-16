@@ -2,7 +2,7 @@ locals {
   derived_bucket_name = "${var.project_id}-${var.service_prefix}-${var.environment}-data"
   bucket_name         = var.bucket_name != "" ? var.bucket_name : local.derived_bucket_name
   cloud_build_default_service_account = (
-    "${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+    "${var.project_number}-compute@developer.gserviceaccount.com"
   )
 
   agent_project_roles = [
@@ -46,10 +46,6 @@ locals {
       }
     ]
   ])
-}
-
-data "google_project" "current" {
-  project_id = var.project_id
 }
 
 resource "google_artifact_registry_repository" "containers" {
@@ -259,7 +255,7 @@ resource "google_project_iam_member" "cloud_build_builder" {
 resource "google_artifact_registry_repository_iam_member" "cloud_build_pushes_images" {
   project    = var.project_id
   location   = google_artifact_registry_repository.containers.location
-  repository = google_artifact_registry_repository.containers.repository_id
+  repository = google_artifact_registry_repository.containers.name
   role       = "roles/artifactregistry.writer"
   member     = "serviceAccount:${local.cloud_build_default_service_account}"
 }

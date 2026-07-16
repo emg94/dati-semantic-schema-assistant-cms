@@ -57,8 +57,11 @@ resource "google_cloud_run_v2_service" "web" {
   }
 
   lifecycle {
-    # Application images are deployed by Cloud Build/gcloud in dev.
+    # Application images are deployed outside Terraform. gcloud also records
+    # its client metadata, which must not create infrastructure drift.
     ignore_changes = [
+      client,
+      client_version,
       template[0].containers[0].image,
     ]
   }
@@ -217,8 +220,11 @@ resource "google_cloud_run_v2_service" "agent" {
   }
 
   lifecycle {
-    # Application images are deployed by Cloud Build/gcloud in dev.
+    # Application images are deployed outside Terraform. gcloud also records
+    # its client metadata, which must not create infrastructure drift.
     ignore_changes = [
+      client,
+      client_version,
       template[0].containers[0].image,
     ]
   }
@@ -349,8 +355,11 @@ resource "google_cloud_run_v2_job" "ingestion" {
   }
 
   lifecycle {
-    # Terraform owns the job shape; Cloud Build/gcloud owns the executable image.
+    # Terraform owns the job shape; application deploys own the image. Ignore
+    # gcloud client metadata for the same reason as the services above.
     ignore_changes = [
+      client,
+      client_version,
       template[0].template[0].containers[0].image,
     ]
   }

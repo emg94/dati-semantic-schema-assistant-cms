@@ -14,6 +14,10 @@ provider "google" {
   region  = var.region
 }
 
+data "google_project" "current" {
+  project_id = var.project_id
+}
+
 locals {
   labels = {
     app        = "schema-assistant"
@@ -33,6 +37,7 @@ module "foundation" {
   source = "../../modules/foundation"
 
   project_id                      = var.project_id
+  project_number                  = data.google_project.current.number
   region                          = var.region
   environment                     = var.environment
   service_prefix                  = var.service_prefix
