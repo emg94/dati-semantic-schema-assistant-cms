@@ -10,6 +10,8 @@ RUN npm run build
 
 FROM node:22-alpine AS runtime
 
+LABEL org.opencontainers.image.title="Schema Assistant web"
+
 WORKDIR /app
 ENV NODE_ENV=production
 
