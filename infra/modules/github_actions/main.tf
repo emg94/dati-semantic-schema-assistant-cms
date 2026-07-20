@@ -1,7 +1,11 @@
 locals {
-  cicd_service_account_id   = "${var.service_prefix}-cicd-${var.environment}"
-  workload_identity_pool_id = "${var.service_prefix}-github-${var.environment}"
-  github_main_ref           = "refs/heads/${var.github_deploy_branch}"
+  cicd_service_account_id     = "${var.service_prefix}-cicd-${var.environment}"
+  workload_identity_pool_id   = "${var.service_prefix}-github-${var.environment}"
+  github_main_ref             = "refs/heads/${var.github_deploy_branch}"
+  github_deploy_workflow_refs = [
+    "${var.github_repository}/.github/workflows/deploy-dev.yml@${local.github_main_ref}",
+    "${var.github_repository}/.github/workflows/deploy-ingestion-dev.yml@${local.github_main_ref}",
+  ]
 
   runtime_service_accounts = toset([
     var.agent_service_account_email,
@@ -37,15 +41,18 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "attribute.repository"          = "assertion.repository"
     "attribute.repository_id"       = "assertion.repository_id"
     "attribute.repository_owner_id" = "assertion.repository_owner_id"
+    "attribute.workflow_ref"        = "assertion.workflow_ref"
   }
 
-  # Numeric ids prevent a deleted or renamed repository from inheriting this trust.
+  # Numeric ids prevent repository name reuse, while workflow_ref limits which
+  # reviewed deployment entry points can exchange an OIDC token.
   attribute_condition = join(" && ", [
     "assertion.repository == '${var.github_repository}'",
     "assertion.repository_id == '${var.github_repository_id}'",
     "assertion.repository_owner_id == '${var.github_repository_owner_id}'",
     "assertion.ref == '${local.github_main_ref}'",
     "assertion.event_name in ['push', 'workflow_dispatch']",
+    "assertion.workflow_ref in ${jsonencode(local.github_deploy_workflow_refs)}",
   ])
 
   oidc {

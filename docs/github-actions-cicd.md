@@ -14,10 +14,13 @@ repository_id: 1291172038
 repository_owner_id: 32837524
 branch: refs/heads/main
 events: push, workflow_dispatch
+workflows: deploy-dev.yml, deploy-ingestion-dev.yml
 ```
 
 The numeric identifiers are checked together with the repository name so a
-renamed or deleted GitHub repository cannot silently inherit this trust.
+renamed or deleted GitHub repository cannot silently inherit this trust. The
+`workflow_ref` claim also prevents other workflows in the same repository from
+exchanging their OIDC tokens for Google Cloud credentials.
 
 Pull request jobs have only `contents: read`. They do not request a GitHub OIDC
 token and cannot authenticate to Google Cloud, including pull requests opened
