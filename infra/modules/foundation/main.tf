@@ -38,11 +38,11 @@ locals {
         email = google_service_account.web.email
         roles = local.web_project_roles
       }
-    ] : [
+      ] : [
       for role in item.roles : {
-        key    = "${item.email}-${role}"
-        email  = item.email
-        role   = role
+        key   = "${item.email}-${role}"
+        email = item.email
+        role  = role
       }
     ]
   ])

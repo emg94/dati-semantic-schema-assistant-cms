@@ -1,7 +1,7 @@
 locals {
-  cicd_service_account_id     = "${var.service_prefix}-cicd-${var.environment}"
-  workload_identity_pool_id   = "${var.service_prefix}-github-${var.environment}"
-  github_main_ref             = "refs/heads/${var.github_deploy_branch}"
+  cicd_service_account_id   = "${var.service_prefix}-cicd-${var.environment}"
+  workload_identity_pool_id = "${var.service_prefix}-github-${var.environment}"
+  github_main_ref           = "refs/heads/${var.github_deploy_branch}"
   github_deploy_workflow_refs = [
     "${var.github_repository}/.github/workflows/deploy-dev.yml@${local.github_main_ref}",
     "${var.github_repository}/.github/workflows/deploy-ingestion-dev.yml@${local.github_main_ref}",
