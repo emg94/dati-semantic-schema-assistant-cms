@@ -13,6 +13,8 @@ RUN apt-get update \
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.26 /uv /usr/local/bin/uv
 
+LABEL org.opencontainers.image.title="Schema Assistant ingestion"
+
 COPY pyproject.toml uv.lock ./
 COPY config ./config
 COPY src ./src
