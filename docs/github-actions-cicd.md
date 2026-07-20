@@ -6,12 +6,12 @@ Commands in this document are intentionally manual: GitHub Actions never runs
 
 ## Trust boundary
 
-The initial Workload Identity Federation provider trusts only this fork:
+The Workload Identity Federation provider trusts only the upstream repository:
 
 ```text
-repository: emg94/dati-semantic-schema-assistant-cms
-repository_id: 1291172038
-repository_owner_id: 32837524
+repository: teamdigitale/dati-semantic-schema-assistant-cms
+repository_id: 1288130374
+repository_owner_id: 25081492
 branch: refs/heads/main
 events: push, workflow_dispatch
 workflows: deploy-dev.yml, deploy-ingestion-dev.yml
@@ -53,9 +53,11 @@ terraform -chdir=infra\envs\dev plan -var-file=dev.tfvars -out=cicd-dev.tfplan
 terraform -chdir=infra\envs\dev show -no-color cicd-dev.tfplan
 ```
 
-The plan should add the GitHub identity resources and IAM grants. Stop if it
-replaces or deletes an existing bucket, Firestore database, Artifact Registry
-repository, Cloud Run service or Cloud Run Job.
+The plan should only add or update GitHub identity resources and IAM grants.
+When transferring trust from a fork, an IAM member binding can be replaced to
+use the upstream repository id. Stop if the plan replaces or deletes an
+existing bucket, Firestore database, Artifact Registry repository, Cloud Run
+service or Cloud Run Job.
 
 Apply only the reviewed saved plan:
 
@@ -75,8 +77,8 @@ terraform -chdir=infra\envs\dev output -raw github_actions_workload_identity_pro
 terraform -chdir=infra\envs\dev output -raw github_actions_service_account_email
 ```
 
-In the fork, open **Settings > Secrets and variables > Actions > Variables** and
-create these repository variables:
+In `teamdigitale/dati-semantic-schema-assistant-cms`, open **Settings > Secrets
+and variables > Actions > Variables** and create these repository variables:
 
 | Variable | Value |
 | --- | --- |
@@ -115,7 +117,8 @@ Direct pushes should be restricted to the smallest possible maintainer group.
 
 ## 5. Test the pipeline
 
-1. Open a pull request in the fork and verify that CI completes without a deploy.
+1. Open a pull request targeting the upstream repository and verify that CI
+   completes without a deploy.
 2. Merge the pull request into `main`.
 3. Review the pending `dev` environment deployment.
 4. Confirm that only changed services receive a new revision.
@@ -145,12 +148,9 @@ gcloud builds submit `
 Run any `gcloud run ... update` command separately and only for the selected
 service or Job. Never use a global deployment command.
 
-## Moving from the fork to the upstream repository
+## Trust transfer from the validation fork
 
-Before enabling upstream deployment, retrieve the upstream repository and owner
-numeric IDs, update the `github_repository*` Terraform variables, review the
-plan, and apply it manually. Then configure the same two GitHub variables and a
-separate protected `dev` environment in the upstream repository.
-
-Changing the WIF condition transfers deployment trust; it does not happen
-automatically when a pull request is merged upstream.
+The pipeline was validated in a fork before enabling upstream deployment.
+Applying this configuration transfers deployment trust to the upstream
+repository; the validation fork can continue to run CI but can no longer
+exchange GitHub OIDC tokens for Google Cloud credentials.

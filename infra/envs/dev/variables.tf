@@ -65,7 +65,7 @@ variable "enabled_services" {
 variable "github_repository" {
   description = "GitHub repository allowed to deploy to dev, in owner/name format."
   type        = string
-  default     = "emg94/dati-semantic-schema-assistant-cms"
+  default     = "teamdigitale/dati-semantic-schema-assistant-cms"
 
   validation {
     condition     = can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", var.github_repository))
@@ -76,7 +76,7 @@ variable "github_repository" {
 variable "github_repository_id" {
   description = "Immutable numeric GitHub repository id allowed to deploy to dev."
   type        = string
-  default     = "1291172038"
+  default     = "1288130374"
 
   validation {
     condition     = can(regex("^[0-9]+$", var.github_repository_id))
@@ -87,7 +87,7 @@ variable "github_repository_id" {
 variable "github_repository_owner_id" {
   description = "Immutable numeric GitHub owner id allowed to deploy to dev."
   type        = string
-  default     = "32837524"
+  default     = "25081492"
 
   validation {
     condition     = can(regex("^[0-9]+$", var.github_repository_owner_id))
