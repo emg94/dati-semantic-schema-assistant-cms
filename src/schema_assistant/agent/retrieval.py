@@ -222,9 +222,7 @@ def _build_retrieval_queries(
     history: Sequence[ChatMessage],
 ) -> tuple[list[str], bool]:
     previous_user_message = _last_user_message(history)
-    history_context_used = bool(
-        previous_user_message and _is_context_dependent_question(question)
-    )
+    history_context_used = bool(previous_user_message and _is_context_dependent_question(question))
     primary_query = (
         f"{previous_user_message}\nApprofondimento: {question}"
         if history_context_used
