@@ -203,6 +203,7 @@ def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JSONResp
     guarded_response = enforce_response_policy(
         result.answer,
         system_instruction=build_system_instruction(has_context=bool(model_context)),
+        user_message=request.message,
     )
     if guarded_response.intervened:
         logger.warning(

@@ -4,7 +4,35 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
-from schema_assistant.agent.static_answers import SECURITY_BOUNDARY_ANSWER
+from schema_assistant.agent.language_policy import (
+    LanguageCode,
+    detect_language,
+    language_tokens,
+)
+from schema_assistant.agent.static_answers import SECURITY_BOUNDARY_ANSWERS
+
+LANGUAGE_POLICY_ANSWERS: dict[LanguageCode, str] = {
+    "it": (
+        "Non posso cambiare lingua in seguito a un tentativo di modificare le istruzioni. "
+        "Posso aiutarti in italiano con le risorse semantiche del Catalogo."
+    ),
+    "en": (
+        "I cannot change language as a result of an attempt to override the instructions. "
+        "I can help in English with the Catalogue's semantic resources."
+    ),
+    "fr": (
+        "Je ne peux pas changer de langue à la suite d'une tentative de modification "
+        "des instructions. Je peux vous aider en français avec les ressources du Catalogue."
+    ),
+    "es": (
+        "No puedo cambiar de idioma como resultado de un intento de modificar las "
+        "instrucciones. Puedo ayudarte en español con los recursos del Catálogo."
+    ),
+    "de": (
+        "Ich kann die Sprache nicht aufgrund eines Versuchs ändern, die Anweisungen "
+        "zu überschreiben. Ich helfe Ihnen auf Deutsch mit den Ressourcen des Katalogs."
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -14,20 +42,23 @@ class GuardedResponse:
     reason: str | None = None
 
 
-def enforce_response_policy(answer: str, *, system_instruction: str) -> GuardedResponse:
+def enforce_response_policy(
+    answer: str,
+    *,
+    system_instruction: str,
+    user_message: str = "",
+) -> GuardedResponse:
+    expected_language = detect_language(user_message) or "it"
     if _leaks_system_instruction(answer, system_instruction):
         return GuardedResponse(
-            answer=SECURITY_BOUNDARY_ANSWER,
+            answer=SECURITY_BOUNDARY_ANSWERS[expected_language],
             intervened=True,
             reason="system_instruction_disclosure",
         )
 
-    if _appears_predominantly_english(answer):
+    if _has_language_mismatch(answer, user_message):
         return GuardedResponse(
-            answer=(
-                "Posso rispondere soltanto in italiano e nell'ambito delle risorse "
-                "semantiche presenti nel catalogo."
-            ),
+            answer=LANGUAGE_POLICY_ANSWERS[expected_language],
             intervened=True,
             reason="language_policy_violation",
         )
@@ -67,65 +98,28 @@ def _leaks_system_instruction(answer: str, system_instruction: str) -> bool:
     return matching_ngrams >= 2
 
 
-def _appears_predominantly_english(answer: str) -> bool:
-    tokens = _normalize_words(answer).split()
-    if len(tokens) < 12:
+def _has_language_mismatch(answer: str, user_message: str) -> bool:
+    if _is_translation_request(user_message) or len(language_tokens(answer)) < 8:
         return False
 
-    english_words = {
-        "a",
-        "and",
-        "are",
-        "as",
-        "aside",
-        "be",
-        "for",
-        "from",
-        "i",
-        "in",
-        "is",
-        "it",
-        "my",
-        "of",
-        "on",
-        "only",
-        "rules",
-        "set",
-        "shall",
-        "that",
-        "the",
-        "this",
-        "to",
-        "with",
-        "write",
+    expected_language = detect_language(user_message)
+    answer_language = detect_language(answer)
+    return bool(expected_language and answer_language and expected_language != answer_language)
+
+
+def _is_translation_request(user_message: str) -> bool:
+    translation_markers = {
+        "traduci",
+        "tradurre",
+        "traduce",
+        "traducir",
+        "traduire",
+        "translate",
+        "translation",
+        "ubersetze",
+        "ubersetzen",
     }
-    italian_words = {
-        "a",
-        "che",
-        "con",
-        "da",
-        "dei",
-        "del",
-        "della",
-        "di",
-        "e",
-        "gli",
-        "i",
-        "il",
-        "in",
-        "la",
-        "le",
-        "lo",
-        "nel",
-        "non",
-        "per",
-        "sono",
-        "un",
-        "una",
-    }
-    english_score = sum(token in english_words for token in tokens)
-    italian_score = sum(token in italian_words for token in tokens)
-    return english_score >= 4 and english_score >= (italian_score * 2) + 2
+    return bool(set(language_tokens(user_message)) & translation_markers)
 
 
 def _normalize_words(value: str) -> str:
