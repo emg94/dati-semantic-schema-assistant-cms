@@ -60,7 +60,7 @@ def find_static_answer(message: str) -> StaticAnswer | None:
         )
 
     # Queste risposte sono stabili: non serve interrogare retrieval o modello.
-    if _is_developer_question(token_set):
+    if _is_developer_question(tokens, token_set):
         return StaticAnswer(answer=DEVELOPER_IDENTITY_ANSWER, reason="identity_developer")
 
     if _is_catalog_identity_question(tokens, token_set):
@@ -132,18 +132,24 @@ def _is_instruction_override(tokens: list[str], token_set: set[str]) -> bool:
     return "ignora tutto" in normalized or "ignore everything" in normalized
 
 
-def _is_developer_question(token_set: set[str]) -> bool:
-    return "chi" in token_set and bool(
-        token_set
-        & {
-            "creatore",
-            "creato",
-            "realizzato",
-            "sviluppatore",
-            "sviluppato",
-            "inventato",
-        }
-    )
+def _is_developer_question(tokens: list[str], token_set: set[str]) -> bool:
+    developer_markers = {
+        "creatore",
+        "creato",
+        "inventato",
+        "realizzato",
+        "sviluppatore",
+        "sviluppato",
+    }
+    if "chi" not in token_set or not token_set & developer_markers:
+        return False
+
+    assistant_references = {"assistente", "bot", "chatbot", "sei", "te", "ti"}
+    if token_set & assistant_references:
+        return True
+
+    normalized = " ".join(tokens)
+    return "tuo sviluppatore" in normalized or "tua sviluppatrice" in normalized
 
 
 def _is_catalog_identity_question(tokens: list[str], token_set: set[str]) -> bool:
