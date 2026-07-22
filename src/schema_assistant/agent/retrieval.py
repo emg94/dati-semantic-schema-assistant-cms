@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
 from schema_assistant.agent.config import AgentSettings, get_settings
+from schema_assistant.agent.models import ChatMessage
 from schema_assistant.knowledge_base.embeddings import VertexEmbeddingClient
 from schema_assistant.knowledge_base.firestore_store import FirestoreVectorStore
 from schema_assistant.knowledge_base.models import MetadataSearchResult, ResourceKind, SearchResult
@@ -34,6 +37,35 @@ GENERIC_ENTITY_HINTS = {
     "vocabolario",
     "vocabolari",
 }
+FOLLOW_UP_PREFIXES = (
+    "anche per ",
+    "e invece ",
+    "e per ",
+    "in quel caso",
+    "in questo caso",
+    "invece ",
+    "nel caso ",
+)
+FOLLOW_UP_QUESTIONS = (
+    "avete codici",
+    "ce ne sono altri",
+    "come mai",
+    "dimmi di piu",
+    "hai codici",
+    "mi dai i codici",
+    "perche",
+    "puoi dirmi di piu",
+    "puoi indicarmi i codici",
+    "quali codici",
+)
+ATECO_PANINARO_EXPANSIONS = (
+    "codice ATECO ristorazione ambulante preparazione e vendita di panini",
+    "codice ATECO preparazione di cibi da asporto vendita ambulante di alimenti e bevande",
+)
+ATECO_PANINARO_FIXED_EXPANSIONS = (
+    "codice ATECO preparazione e vendita di panini in sede fissa",
+    "codice ATECO ristorazione senza somministrazione preparazione di cibi da asporto",
+)
 
 
 @dataclass(frozen=True)
@@ -49,6 +81,8 @@ class RetrievalResult:
     has_relevant_context: bool
     best_distance: float | None
     discarded_chunks: int
+    query_variants: int
+    history_context_used: bool
 
 
 class KnowledgeBaseRetriever:
@@ -71,11 +105,17 @@ class KnowledgeBaseRetriever:
             chunks_collection_group=settings.firestore_chunks_collection_group,
         )
 
-    def retrieve(self, question: str) -> RetrievalResult:
-        detected_entities = _detect_entities(question, self._entity_hints)
-        detected_resources = _detect_resources(question, self._resource_keywords)
+    def retrieve(
+        self,
+        question: str,
+        history: Sequence[ChatMessage] = (),
+    ) -> RetrievalResult:
+        retrieval_queries, history_context_used = _build_retrieval_queries(question, history)
+        routing_question = retrieval_queries[0]
+        detected_entities = _detect_entities(routing_question, self._entity_hints)
+        detected_resources = _detect_resources(routing_question, self._resource_keywords)
         entity_filter = _entity_filter_for_resources(detected_entities, detected_resources)
-        listing_question = _is_listing_question(question)
+        listing_question = _is_listing_question(routing_question)
         search_limit = (
             self._settings.rag_top_k * 2 if listing_question else self._settings.rag_top_k
         )
@@ -84,23 +124,27 @@ class KnowledgeBaseRetriever:
             if listing_question
             else self._settings.rag_context_max_chars
         )
-        query_vector = self._embeddings.embed_query(question)
         metadata_assets = self._metadata_assets(
-            question=question,
+            question=routing_question,
             entity_filter=entity_filter,
             detected_resources=detected_resources,
             listing_question=listing_question,
         )
 
-        chunks = self._store.search(
-            query_vector,
-            limit=search_limit,
-            entity_ids=entity_filter,
-            resource_ids=detected_resources or None,
-        )
+        query_vectors = [self._embeddings.embed_query(query) for query in retrieval_queries]
+        chunks: list[SearchResult] = []
+        for query_vector in query_vectors:
+            query_chunks = self._store.search(
+                query_vector,
+                limit=search_limit,
+                entity_ids=entity_filter,
+                resource_ids=detected_resources or None,
+            )
+            chunks = _merge_search_results(chunks, query_chunks, limit=search_limit)
+
         if _should_search_context_documents(entity_filter, detected_resources):
             document_chunks = self._store.search(
-                query_vector,
+                query_vectors[0],
                 limit=max(3, min(6, self._settings.rag_top_k // 2)),
                 entity_ids={"catalog"},
                 resource_ids={"context_documents"},
@@ -136,6 +180,8 @@ class KnowledgeBaseRetriever:
             has_relevant_context=has_relevant_context,
             best_distance=best_distance,
             discarded_chunks=discarded_chunks,
+            query_variants=len(retrieval_queries),
+            history_context_used=history_context_used,
         )
 
     def _metadata_assets(
@@ -169,6 +215,57 @@ class KnowledgeBaseRetriever:
 @lru_cache(maxsize=1)
 def get_knowledge_base_retriever() -> KnowledgeBaseRetriever:
     return KnowledgeBaseRetriever(get_settings())
+
+
+def _build_retrieval_queries(
+    question: str,
+    history: Sequence[ChatMessage],
+) -> tuple[list[str], bool]:
+    previous_user_message = _last_user_message(history)
+    history_context_used = bool(previous_user_message and _is_context_dependent_question(question))
+    primary_query = (
+        f"{previous_user_message}\nApprofondimento: {question}"
+        if history_context_used
+        else question
+    )
+    queries = [primary_query, *_ateco_query_expansions(primary_query)]
+    return _dedupe_queries(queries), history_context_used
+
+
+def _last_user_message(history: Sequence[ChatMessage]) -> str | None:
+    return next((item.content for item in reversed(history) if item.role == "user"), None)
+
+
+def _is_context_dependent_question(question: str) -> bool:
+    normalized = _normalize_text(question).strip(" .?!,:;")
+    if not normalized:
+        return False
+    if normalized == "approfondisci":
+        return True
+    if any(normalized.startswith(prefix) for prefix in FOLLOW_UP_PREFIXES):
+        return True
+    return any(normalized.startswith(pattern) for pattern in FOLLOW_UP_QUESTIONS)
+
+
+def _ateco_query_expansions(question: str) -> tuple[str, ...]:
+    normalized = _normalize_text(question)
+    if not _contains_term(normalized, "ateco") or not _contains_term(normalized, "paninaro"):
+        return ()
+    if any(term in normalized for term in ("attivita fissa", "sede fissa", "locale fisso")):
+        return ATECO_PANINARO_FIXED_EXPANSIONS
+    return ATECO_PANINARO_EXPANSIONS
+
+
+def _dedupe_queries(queries: Sequence[str]) -> list[str]:
+    deduplicated: list[str] = []
+    seen: set[str] = set()
+    for query in queries:
+        normalized = _normalize_text(query)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        deduplicated.append(query.strip())
+    return deduplicated
 
 
 def _load_resource_keywords(*paths: Path) -> dict[ResourceKind, list[str]]:
@@ -411,7 +508,9 @@ def _dedupe_sources(
 
 def _normalize_text(value: str) -> str:
     lowered = value.lower().replace("'", " ")
-    return re.sub(r"\s+", " ", lowered).strip()
+    decomposed = unicodedata.normalize("NFKD", lowered)
+    without_accents = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return re.sub(r"\s+", " ", without_accents).strip()
 
 
 def _contains_term(text: str, term: str) -> bool:
