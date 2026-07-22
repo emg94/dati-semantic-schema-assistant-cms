@@ -11,6 +11,8 @@ from schema_assistant.agent.config import get_settings
 from schema_assistant.agent.guardrails import validate_chat_request
 from schema_assistant.agent.logging import configure_logging
 from schema_assistant.agent.models import ChatRequest, ChatResponse, ChatUsage, ErrorResponse
+from schema_assistant.agent.prompts import build_system_instruction
+from schema_assistant.agent.response_guardrails import enforce_response_policy
 from schema_assistant.agent.retrieval import RetrievalResult, get_knowledge_base_retriever
 from schema_assistant.agent.static_answers import find_static_answer
 from schema_assistant.agent.vertex_client import get_vertex_chat_client
@@ -133,7 +135,10 @@ def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JSONResp
     retrieval_result: RetrievalResult | None = None
     if settings.rag_enabled:
         try:
-            retrieval_result = get_knowledge_base_retriever().retrieve(request.message)
+            retrieval_result = get_knowledge_base_retriever().retrieve(
+                request.message,
+                request.history,
+            )
         except Exception:
             logger.exception("rag_retrieval_failed", extra={"request_id": request_id})
             return JSONResponse(
@@ -179,10 +184,11 @@ def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JSONResp
         )
 
     try:
+        model_context = retrieval_result.context if retrieval_result else None
         result = get_vertex_chat_client().answer(
             request.message,
             request.history,
-            context=retrieval_result.context if retrieval_result else None,
+            context=model_context,
         )
     except Exception:
         logger.exception("vertex_chat_failed", extra={"request_id": request_id})
@@ -192,6 +198,19 @@ def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JSONResp
                 detail="Il modello non e al momento raggiungibile.",
                 request_id=request_id,
             ).model_dump(),
+        )
+
+    guarded_response = enforce_response_policy(
+        result.answer,
+        system_instruction=build_system_instruction(has_context=bool(model_context)),
+    )
+    if guarded_response.intervened:
+        logger.warning(
+            "chat_response_guardrail_applied",
+            extra={
+                "request_id": request_id,
+                "reason": guarded_response.reason,
+            },
         )
 
     logger.info(
@@ -223,11 +242,15 @@ def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JSONResp
             "rag_best_distance": retrieval_result.best_distance if retrieval_result else None,
             "rag_max_distance": settings.rag_max_distance,
             "rag_discarded_chunks": retrieval_result.discarded_chunks if retrieval_result else 0,
+            "rag_query_variants": retrieval_result.query_variants if retrieval_result else 0,
+            "rag_history_context_used": retrieval_result.history_context_used
+            if retrieval_result
+            else False,
         },
     )
 
     return ChatResponse(
-        answer=result.answer,
+        answer=guarded_response.answer,
         sources=retrieval_result.sources if retrieval_result else [],
         usage=result.usage,
         cost_status=settings.cost_status,

@@ -24,6 +24,18 @@ DEVELOPER_IDENTITY_ANSWER = (
     "innovativa e di qualità."
 )
 
+SECURITY_BOUNDARY_ANSWER = (
+    "Non posso fornire, ripetere o ricostruire istruzioni interne, configurazioni "
+    "o prompt di sistema. Posso invece aiutarti, in italiano, con le risorse "
+    "semantiche presenti nel catalogo."
+)
+
+INSTRUCTION_OVERRIDE_ANSWER = (
+    "Non posso ignorare le istruzioni operative, cambiare ruolo o uscire "
+    "dall'ambito del catalogo. Posso aiutarti in italiano con le risorse "
+    "semantiche disponibili."
+)
+
 
 @dataclass(frozen=True)
 class StaticAnswer:
@@ -35,6 +47,18 @@ def find_static_answer(message: str) -> StaticAnswer | None:
     tokens = _tokens(message)
     token_set = set(tokens)
 
+    if _is_system_prompt_disclosure(token_set):
+        return StaticAnswer(
+            answer=SECURITY_BOUNDARY_ANSWER,
+            reason="security_prompt_disclosure",
+        )
+
+    if _is_instruction_override(tokens, token_set):
+        return StaticAnswer(
+            answer=INSTRUCTION_OVERRIDE_ANSWER,
+            reason="security_instruction_override",
+        )
+
     # Queste risposte sono stabili: non serve interrogare retrieval o modello.
     if _is_developer_question(token_set):
         return StaticAnswer(answer=DEVELOPER_IDENTITY_ANSWER, reason="identity_developer")
@@ -43,6 +67,69 @@ def find_static_answer(message: str) -> StaticAnswer | None:
         return StaticAnswer(answer=CATALOG_IDENTITY_ANSWER, reason="identity_catalog")
 
     return None
+
+
+def _is_system_prompt_disclosure(token_set: set[str]) -> bool:
+    disclosure_markers = {
+        "descrivi",
+        "dimmi",
+        "elenca",
+        "fornisci",
+        "mostra",
+        "quali",
+        "repeat",
+        "reveal",
+        "ripeti",
+        "rivela",
+        "stampa",
+        "trascrivi",
+        "what",
+    }
+    if not token_set & disclosure_markers:
+        return False
+
+    explicitly_internal = bool(
+        token_set & {"internal", "interne", "interno"}
+        and token_set
+        & {"configurazione", "direttive", "instructions", "istruzioni", "policy", "regole"}
+    )
+    explicit_system_prompt = "prompt" in token_set and bool(token_set & {"sistema", "system"})
+    return explicitly_internal or explicit_system_prompt
+
+
+def _is_instruction_override(tokens: list[str], token_set: set[str]) -> bool:
+    override_markers = {
+        "bypass",
+        "bypassa",
+        "dimentica",
+        "disattiva",
+        "disregard",
+        "forget",
+        "ignora",
+        "ignore",
+        "override",
+        "sovrascrivi",
+    }
+    controlled_targets = {
+        "everything",
+        "instructions",
+        "istruzioni",
+        "policy",
+        "precedenti",
+        "previous",
+        "prompt",
+        "regole",
+        "rules",
+        "sistema",
+        "system",
+        "tutto",
+        "vincoli",
+    }
+    if token_set & override_markers and token_set & controlled_targets:
+        return True
+
+    normalized = " ".join(tokens)
+    return "ignora tutto" in normalized or "ignore everything" in normalized
 
 
 def _is_developer_question(token_set: set[str]) -> bool:
