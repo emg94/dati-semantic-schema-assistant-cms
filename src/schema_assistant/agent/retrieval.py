@@ -14,7 +14,6 @@ from schema_assistant.knowledge_base.embeddings import VertexEmbeddingClient
 from schema_assistant.knowledge_base.firestore_store import FirestoreVectorStore
 from schema_assistant.knowledge_base.models import MetadataSearchResult, ResourceKind, SearchResult
 
-KNOWN_ENTITIES = {"istat", "inps", "inail", "italia"}
 CATALOG_KEYWORDS = {"schema.gov.it", "catalogo", "interoperabilita", "documento", "documenti"}
 CATALOG_RESOURCES = {"context_documents", "dates_collection"}
 GENERIC_ENTITY_HINTS = {
@@ -92,7 +91,11 @@ class KnowledgeBaseRetriever:
             settings.resources_config_path,
             settings.routing_lexicon_config_path,
         )
-        self._entity_hints = _load_entity_hints(settings.routing_lexicon_config_path)
+        self._entity_ids = _load_entity_ids(settings.entities_config_path)
+        self._entity_hints = _load_entity_hints(
+            settings.routing_lexicon_config_path,
+            entity_ids=self._entity_ids,
+        )
         self._embeddings = VertexEmbeddingClient(
             project_id=settings.project_id,
             location=settings.location,
@@ -112,7 +115,11 @@ class KnowledgeBaseRetriever:
     ) -> RetrievalResult:
         retrieval_queries, history_context_used = _build_retrieval_queries(question, history)
         routing_question = retrieval_queries[0]
-        detected_entities = _detect_entities(routing_question, self._entity_hints)
+        detected_entities = _detect_entities(
+            routing_question,
+            self._entity_hints,
+            entity_ids=self._entity_ids,
+        )
         detected_resources = _detect_resources(routing_question, self._resource_keywords)
         entity_filter = _entity_filter_for_resources(detected_entities, detected_resources)
         listing_question = _is_listing_question(routing_question)
@@ -288,7 +295,29 @@ def _load_resource_keywords(*paths: Path) -> dict[ResourceKind, list[str]]:
     return keywords
 
 
-def _load_entity_hints(path: Path) -> dict[str, list[str]]:
+def _load_entity_ids(path: Path) -> set[str]:
+    if not path.exists():
+        return set()
+
+    with path.open("r", encoding="utf-8") as file:
+        payload = json.load(file)
+
+    raw_entities = payload.get("entities")
+    if not isinstance(raw_entities, list):
+        return set()
+
+    return {
+        _normalize_text(str(entity.get("name")))
+        for entity in raw_entities
+        if isinstance(entity, dict) and _normalize_text(str(entity.get("name") or ""))
+    }
+
+
+def _load_entity_hints(
+    path: Path,
+    *,
+    entity_ids: set[str] | None = None,
+) -> dict[str, list[str]]:
     if not path.exists():
         return {}
 
@@ -301,7 +330,12 @@ def _load_entity_hints(path: Path) -> dict[str, list[str]]:
 
     hints: dict[str, list[str]] = {}
     for entity_id, config in raw_hints.items():
-        if entity_id not in KNOWN_ENTITIES or not isinstance(config, dict):
+        normalized_entity_id = _normalize_text(str(entity_id))
+        if (
+            not isinstance(config, dict)
+            or entity_ids is not None
+            and normalized_entity_id not in entity_ids
+        ):
             continue
         raw_keywords = config.get("keywords") or []
         keywords = {
@@ -310,16 +344,25 @@ def _load_entity_hints(path: Path) -> dict[str, list[str]]:
             if _normalize_text(str(keyword))
         }
         if keywords:
-            hints[entity_id] = sorted(keywords, key=lambda keyword: (-len(keyword), keyword))
+            hints[normalized_entity_id] = sorted(
+                keywords,
+                key=lambda keyword: (-len(keyword), keyword),
+            )
     return hints
 
 
 def _detect_entities(
     question: str,
     entity_hints: dict[str, list[str]] | None = None,
+    *,
+    entity_ids: set[str] | None = None,
 ) -> set[str]:
     normalized = _normalize_text(question)
-    detected = {entity for entity in KNOWN_ENTITIES if entity in normalized}
+    detected = {
+        entity_id
+        for entity_id in entity_ids or set()
+        if _matches_entity_id(normalized, entity_id)
+    }
     if not detected and entity_hints:
         entity_scores = {
             entity_id: _entity_hint_score(normalized, keywords)
@@ -335,6 +378,15 @@ def _detect_entities(
     if any(keyword in normalized for keyword in CATALOG_KEYWORDS):
         detected.add("catalog")
     return detected
+
+
+def _matches_entity_id(question: str, entity_id: str) -> bool:
+    normalized_entity_id = _normalize_text(entity_id)
+    variants = {
+        normalized_entity_id,
+        normalized_entity_id.replace("-", " "),
+    }
+    return any(_contains_term(question, variant) for variant in variants if variant)
 
 
 def _detect_resources(
