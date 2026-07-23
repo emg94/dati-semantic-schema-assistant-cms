@@ -359,9 +359,7 @@ def _detect_entities(
 ) -> set[str]:
     normalized = _normalize_text(question)
     detected = {
-        entity_id
-        for entity_id in entity_ids or set()
-        if _matches_entity_id(normalized, entity_id)
+        entity_id for entity_id in entity_ids or set() if _matches_entity_id(normalized, entity_id)
     }
     if not detected and entity_hints:
         entity_scores = {
