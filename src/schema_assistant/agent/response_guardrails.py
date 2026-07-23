@@ -4,7 +4,11 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
-from schema_assistant.agent.static_answers import SECURITY_BOUNDARY_ANSWER
+from schema_assistant.agent.language_policy import (
+    detect_language,
+    language_tokens,
+)
+from schema_assistant.agent.static_answers import SECURITY_BOUNDARY_ANSWERS
 
 
 @dataclass(frozen=True)
@@ -12,27 +16,27 @@ class GuardedResponse:
     answer: str
     intervened: bool = False
     reason: str | None = None
+    language_mismatch_observed: bool = False
 
 
-def enforce_response_policy(answer: str, *, system_instruction: str) -> GuardedResponse:
+def enforce_response_policy(
+    answer: str,
+    *,
+    system_instruction: str,
+    user_message: str = "",
+) -> GuardedResponse:
+    expected_language = detect_language(user_message) or "it"
     if _leaks_system_instruction(answer, system_instruction):
         return GuardedResponse(
-            answer=SECURITY_BOUNDARY_ANSWER,
+            answer=SECURITY_BOUNDARY_ANSWERS[expected_language],
             intervened=True,
             reason="system_instruction_disclosure",
         )
 
-    if _appears_predominantly_english(answer):
-        return GuardedResponse(
-            answer=(
-                "Posso rispondere soltanto in italiano e nell'ambito delle risorse "
-                "semantiche presenti nel catalogo."
-            ),
-            intervened=True,
-            reason="language_policy_violation",
-        )
-
-    return GuardedResponse(answer=answer)
+    return GuardedResponse(
+        answer=answer,
+        language_mismatch_observed=_has_language_mismatch(answer, user_message),
+    )
 
 
 def _leaks_system_instruction(answer: str, system_instruction: str) -> bool:
@@ -67,65 +71,28 @@ def _leaks_system_instruction(answer: str, system_instruction: str) -> bool:
     return matching_ngrams >= 2
 
 
-def _appears_predominantly_english(answer: str) -> bool:
-    tokens = _normalize_words(answer).split()
-    if len(tokens) < 12:
+def _has_language_mismatch(answer: str, user_message: str) -> bool:
+    if _is_translation_request(user_message) or len(language_tokens(answer)) < 8:
         return False
 
-    english_words = {
-        "a",
-        "and",
-        "are",
-        "as",
-        "aside",
-        "be",
-        "for",
-        "from",
-        "i",
-        "in",
-        "is",
-        "it",
-        "my",
-        "of",
-        "on",
-        "only",
-        "rules",
-        "set",
-        "shall",
-        "that",
-        "the",
-        "this",
-        "to",
-        "with",
-        "write",
+    expected_language = detect_language(user_message)
+    answer_language = detect_language(answer)
+    return bool(expected_language and answer_language and expected_language != answer_language)
+
+
+def _is_translation_request(user_message: str) -> bool:
+    translation_markers = {
+        "traduci",
+        "tradurre",
+        "traduce",
+        "traducir",
+        "traduire",
+        "translate",
+        "translation",
+        "ubersetze",
+        "ubersetzen",
     }
-    italian_words = {
-        "a",
-        "che",
-        "con",
-        "da",
-        "dei",
-        "del",
-        "della",
-        "di",
-        "e",
-        "gli",
-        "i",
-        "il",
-        "in",
-        "la",
-        "le",
-        "lo",
-        "nel",
-        "non",
-        "per",
-        "sono",
-        "un",
-        "una",
-    }
-    english_score = sum(token in english_words for token in tokens)
-    italian_score = sum(token in italian_words for token in tokens)
-    return english_score >= 4 and english_score >= (italian_score * 2) + 2
+    return bool(set(language_tokens(user_message)) & translation_markers)
 
 
 def _normalize_words(value: str) -> str:
