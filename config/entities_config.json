@@ -55,6 +55,20 @@
         "schema_yaml": "italia_yaml_schemas",
         "vocabulary": "italia_vocabularies"
       }
+    },
+        {
+      "name": "PCM-DIPE",
+      "repo_url": "https://github.com/PCM-DIPE/public-investment/tree/main",
+      "assets_path": "assets",
+      "ontologies_folder": "ontologies/PublicInvestment",
+      "schemas_folder": "",
+      "vocabularies_folder": "controlled-vocabularies",
+      "collections": {
+        "ontology": "PCM-DIPE_ontologies",
+        "schema_ttl": "PCM-DIPE_ttl_schemas",
+        "schema_yaml": "PCM-DIPE_yaml_schemas",
+        "vocabulary": "PCM-DIPE_vocabularies"
+      }
     }
   ]
 }

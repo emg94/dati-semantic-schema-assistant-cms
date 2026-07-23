@@ -213,6 +213,11 @@ def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JSONResp
                 "reason": guarded_response.reason,
             },
         )
+    elif guarded_response.language_mismatch_observed:
+        logger.info(
+            "chat_language_mismatch_observed",
+            extra={"request_id": request_id},
+        )
 
     logger.info(
         "chat_completed",
