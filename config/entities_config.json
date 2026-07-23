@@ -139,6 +139,20 @@
         "schema_yaml": "Bluarancio_yaml_schemas",
         "vocabulary": "Bluarancio_vocabularies"
       }
+    },
+      {
+      "name": "Dipartimento-Funzione-Pubblica-PCM",
+      "repo_url": "https://github.com/DipartimentoFunzionePubblicaPCM/DFP-NDC",
+      "assets_path": "assets",
+      "ontologies_folder": "ontologies",
+      "schemas_folder": "schemas",
+      "vocabularies_folder": "controlled-vocabularies",
+      "collections": {
+        "ontology": "Dipartimento-Funzione-Pubblica-PCM_ontologies",
+        "schema_ttl": "Dipartimento-Funzione-Pubblica-PCM_ttl_schemas",
+        "schema_yaml": "Dipartimento-Funzione-Pubblica-PCM_yaml_schemas",
+        "vocabulary": "Dipartimento-Funzione-Pubblica-PCM_vocabularies"
+      }
     }
   ]
 }
