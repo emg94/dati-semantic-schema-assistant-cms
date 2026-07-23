@@ -52,6 +52,27 @@
                                       ]
                      },
     "entity_hints":  {
+                         "pcm-dipe": {
+                                          "keywords": ["pcm dipe", "dipartimento per la programmazione economica"]
+                                      },
+                         "inapp": {
+                                      "keywords": ["inapp", "istituto nazionale analisi politiche pubbliche"]
+                                  },
+                         "agenzia-del-demanio": {
+                                                     "keywords": ["agenzia del demanio", "demanio"]
+                                                 },
+                         "isprambiente": {
+                                              "keywords": ["ispra", "istituto superiore per la protezione e la ricerca ambientale"]
+                                          },
+                         "mlps-dg-innovazione-divisione-iii": {
+                                                                  "keywords": ["mlps", "ministero del lavoro e delle politiche sociali", "direzione innovazione divisione iii"]
+                                                              },
+                         "bluarancio": {
+                                             "keywords": ["bluarancio", "leo open data"]
+                                         },
+                         "dipartimento-funzione-pubblica-pcm": {
+                                                                  "keywords": ["dipartimento funzione pubblica", "funzione pubblica pcm", "dfp ndc"]
+                                                              },
                          "istat":  {
                                        "keywords":  [
                                                         "ateco",

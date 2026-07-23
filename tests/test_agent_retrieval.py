@@ -7,7 +7,10 @@ def test_retrieval_detects_entities_and_catalog() -> None:
     pytest.importorskip("pydantic")
     from schema_assistant.agent.retrieval import _detect_entities
 
-    assert _detect_entities("Mostrami i vocabolari ISTAT su schema.gov.it") == {
+    assert _detect_entities(
+        "Mostrami i vocabolari ISTAT su schema.gov.it",
+        entity_ids={"istat"},
+    ) == {
         "catalog",
         "istat",
     }
@@ -76,6 +79,48 @@ def test_retrieval_uses_entity_hints_without_matching_generic_words(tmp_path: Pa
 
     assert _detect_entities("Qual e il codice ATECO di un paninaro?", hints) == {"istat"}
     assert _detect_entities("Mostrami le risorse disponibili", hints) == set()
+
+
+def test_retrieval_loads_and_matches_all_configured_entities(tmp_path: Path) -> None:
+    pytest.importorskip("pydantic")
+    from schema_assistant.agent.retrieval import _detect_entities, _load_entity_ids
+
+    entities_path = tmp_path / "entities_config.json"
+    entities_path.write_text(
+        '{"entities": [{"name": "Agenzia-del-Demanio"}, '
+        '{"name": "Dipartimento-Funzione-Pubblica-PCM"}]}',
+        encoding="utf-8",
+    )
+    entity_ids = _load_entity_ids(entities_path)
+
+    assert entity_ids == {"agenzia-del-demanio", "dipartimento-funzione-pubblica-pcm"}
+    assert _detect_entities(
+        "Mostrami i vocabolari dell'Agenzia del Demanio",
+        entity_ids=entity_ids,
+    ) == {"agenzia-del-demanio"}
+    assert _detect_entities(
+        "Quali ontologie ha il Dipartimento Funzione Pubblica PCM?",
+        entity_ids=entity_ids,
+    ) == {"dipartimento-funzione-pubblica-pcm"}
+
+
+def test_retrieval_uses_configured_entity_aliases() -> None:
+    pytest.importorskip("pydantic")
+    from schema_assistant.agent.retrieval import (
+        _detect_entities,
+        _load_entity_hints,
+        _load_entity_ids,
+    )
+
+    entity_ids = _load_entity_ids(Path("config/entities_config.json"))
+    hints = _load_entity_hints(
+        Path("config/routing_lexicon.json"),
+        entity_ids=entity_ids,
+    )
+
+    assert _detect_entities("Mostrami le ontologie ISPRA", hints, entity_ids=entity_ids) == {
+        "isprambiente"
+    }
 
 
 def test_retrieval_routes_ateco_questions_to_vocabularies() -> None:
