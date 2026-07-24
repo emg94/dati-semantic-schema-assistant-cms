@@ -10,3 +10,13 @@ developer_invokers = [
 # Optional. Leave empty to use:
 # istat-ndc-schema-ass-cms-dev-schema-assistant-dev-data
 bucket_name = ""
+
+# Only these exact HTTPS origins can embed the public web frontend in an iframe.
+# Confirm the test hostname with the WordPress team before applying.
+web_frame_ancestors = [
+  "https://wp-ndc-dev.apps.cloudpub.testedev.istat.it",
+  "https://wp-ndc-test.apps.cloudpub.testedev.istat.it",
+  "https://wp-ndc-prod-blue.apps.cloudpub.istat.it",
+  "https://wp-ndc-prod-green.apps.cloudpub.istat.it",
+  "https://schema.gov.it",
+]

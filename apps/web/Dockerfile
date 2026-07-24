@@ -17,6 +17,7 @@ ENV NODE_ENV=production
 
 COPY --from=build /workspace/dist/ndc-platform-ai/browser ./public
 COPY apps/web/server.mjs ./server.mjs
+COPY apps/web/security-headers.mjs ./security-headers.mjs
 
 USER node
 EXPOSE 8080

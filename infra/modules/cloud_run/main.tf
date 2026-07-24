@@ -40,6 +40,11 @@ resource "google_cloud_run_v2_service" "web" {
         value = google_cloud_run_v2_service.agent.uri
       }
 
+      env {
+        name  = "FRAME_ANCESTORS"
+        value = join(",", var.web_frame_ancestors)
+      }
+
       resources {
         limits = {
           cpu    = "1"
