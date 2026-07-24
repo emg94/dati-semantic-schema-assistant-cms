@@ -6,6 +6,7 @@
     "start": "node ./node_modules/@angular/cli/bin/ng.js serve",
     "build": "node ./node_modules/@angular/cli/bin/ng.js build",
     "start:cloud-run": "node server.mjs",
+    "test:security": "node --test security-headers.test.mjs",
     "watch": "node ./node_modules/@angular/cli/bin/ng.js build --watch --configuration development",
     "test": "node ./node_modules/@angular/cli/bin/ng.js test"
   },

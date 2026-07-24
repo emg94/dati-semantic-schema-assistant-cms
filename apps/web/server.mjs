@@ -3,6 +3,8 @@ import { readFile, stat } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
+import { buildSecurityHeaders } from './security-headers.mjs';
+
 const port = Number(process.env.PORT || 8080);
 const staticRoot = resolve(process.env.STATIC_DIR || 'public');
 const agentServiceUrl = process.env.AGENT_SERVICE_URL || '';
@@ -21,26 +23,7 @@ const mimeTypes = {
   '.woff2': 'font/woff2',
 };
 
-const securityHeaders = {
-  'content-security-policy': [
-    "default-src 'self'",
-    "base-uri 'self'",
-    "connect-src 'self'",
-    "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-    "img-src 'self' data:",
-    "object-src 'none'",
-    "script-src 'self'",
-    // Angular installs component styles at runtime. Scripts remain restricted to self.
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
-  ].join('; '),
-  'cross-origin-opener-policy': 'same-origin',
-  'permissions-policy': 'camera=(), geolocation=(), microphone=()',
-  'referrer-policy': 'same-origin',
-  'x-content-type-options': 'nosniff',
-  'x-frame-options': 'DENY',
-};
+const securityHeaders = buildSecurityHeaders();
 
 const server = createServer(async (request, response) => {
   const requestUrl = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);

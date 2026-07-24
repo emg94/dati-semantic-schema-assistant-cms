@@ -33,6 +33,20 @@ variable "web_image" {
   type        = string
 }
 
+variable "web_frame_ancestors" {
+  description = "Exact HTTPS origins allowed to embed the public web frontend."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for origin in var.web_frame_ancestors :
+      can(regex("^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$", origin))
+    ])
+    error_message = "web_frame_ancestors accepts exact HTTPS origins only, without paths, trailing slashes, or wildcards."
+  }
+}
+
 variable "ingestion_image" {
   description = "Ingestion job container image."
   type        = string

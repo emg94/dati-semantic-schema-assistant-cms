@@ -63,6 +63,7 @@ module "cloud_run" {
   labels                          = local.labels
   agent_image                     = var.agent_image
   web_image                       = var.web_image
+  web_frame_ancestors             = var.web_frame_ancestors
   ingestion_image                 = var.ingestion_image
   agent_service_account_email     = module.foundation.agent_service_account_email
   ingestion_service_account_email = module.foundation.ingestion_service_account_email

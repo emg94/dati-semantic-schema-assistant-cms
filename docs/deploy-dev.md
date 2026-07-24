@@ -379,6 +379,12 @@ proxy ottiene invece un ID token dal metadata server Cloud Run e invoca l'agent
 privato. La cronologia della chat resta nella memoria del browser e non viene
 salvata dal servizio web o da Firestore.
 
+Il frontend puo essere incorporato esclusivamente dalle origini HTTPS indicate
+in `web_frame_ancestors`. Terraform configura la variabile `FRAME_ANCESTORS` del
+container e il server la traduce nella direttiva CSP `frame-ancestors`. Non usare
+wildcard: ogni host WordPress deve essere elencato esplicitamente. In assenza di
+configurazione, l'app torna a `frame-ancestors 'none'`.
+
 Per creare il servizio web placeholder:
 
 ```powershell
@@ -409,6 +415,23 @@ gcloud run services update schema-assistant-web-dev `
   --region europe-west8 `
   --image europe-west8-docker.pkg.dev/istat-ndc-schema-ass-cms-dev/schema-assistant/web:dev
 ```
+
+Verifica gli header dopo il deploy:
+
+```powershell
+$WEB_URL = terraform -chdir=infra\envs\dev output -raw web_url
+$headers = (Invoke-WebRequest -Method Head -Uri $WEB_URL).Headers
+$headers['Content-Security-Policy']
+$headers['X-Frame-Options']
+```
+
+La CSP deve contenere `frame-ancestors 'self'` seguito dalle origini configurate;
+`X-Frame-Options` deve risultare assente. Completa la verifica aprendo l'iframe da
+un host WordPress autorizzato e da un'origine non presente nella allowlist: il
+primo deve caricarsi, mentre il secondo deve essere bloccato dal browser.
+
+Prima dell'apply conferma con il team WordPress che
+`wp-ndc-test.apps.cloudpub.testedev.istat.it` sia il nome host effettivo del test.
 
 Kill switch temporaneo per costi o manutenzione:
 

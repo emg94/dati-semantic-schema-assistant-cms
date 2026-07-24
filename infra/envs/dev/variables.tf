@@ -141,6 +141,26 @@ variable "web_image" {
   default     = "us-docker.pkg.dev/cloudrun/container/hello"
 }
 
+variable "web_frame_ancestors" {
+  description = "Exact HTTPS origins allowed to embed the dev web frontend."
+  type        = list(string)
+  default = [
+    "https://wp-ndc-dev.apps.cloudpub.testedev.istat.it",
+    "https://wp-ndc-test.apps.cloudpub.testedev.istat.it",
+    "https://wp-ndc-prod-blue.apps.cloudpub.istat.it",
+    "https://wp-ndc-prod-green.apps.cloudpub.istat.it",
+    "https://schema.gov.it",
+  ]
+
+  validation {
+    condition = alltrue([
+      for origin in var.web_frame_ancestors :
+      can(regex("^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$", origin))
+    ])
+    error_message = "web_frame_ancestors accepts exact HTTPS origins only, without paths, trailing slashes, or wildcards."
+  }
+}
+
 variable "ingestion_image" {
   description = "Bootstrap image for the ingestion job. Application deploys update it outside Terraform."
   type        = string
